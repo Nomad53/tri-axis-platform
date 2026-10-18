@@ -1,14 +1,11 @@
-// TRI AXIS v0.1.4
+// TRI AXIS v0.1.5
 // FILE DESTINATION: app/layout.js
-//
-// The version is deliberately visible in the sidebar.
-// Every future release should update APP_VERSION here.
 
 import './globals.css'
 import Link from 'next/link'
 
-const APP_VERSION = 'v0.1.4'
-const APP_MILESTONE = 'Company Entity Discovery'
+const APP_VERSION = 'v0.1.5'
+const APP_MILESTONE = 'Prospect Table Discovery'
 
 export const metadata = {
   title: 'Tri Axis | Industrial Prospect Intelligence',
@@ -30,13 +27,8 @@ export default function RootLayout({ children }) {
             </div>
 
             <nav className="sidebar-nav">
-              <Link href="/">
-                Dashboard
-              </Link>
-
-              <Link href="/discover">
-                Discover
-              </Link>
+              <Link href="/">Dashboard</Link>
+              <Link href="/discover">Discover</Link>
             </nav>
 
             <div className="sidebar-footer">
