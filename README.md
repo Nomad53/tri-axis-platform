@@ -1,66 +1,82 @@
-TRI AXIS v0.1.4
-Company Entity Discovery
+TRI AXIS v0.1.5
+Prospect Table Discovery
 
-WHAT THIS VERSION CHANGES
+WHY THIS VERSION EXISTS
 
-The discovery engine no longer treats raw web-search results as companies.
+The previous UI showed too much research text in large cards.
+The user needs a prospect database, not a research report.
 
-The new server-side discovery route explicitly:
+This version changes Discover into a compact company table aligned to the Supabase companies table.
 
-1. Builds multiple targeted search queries.
-2. Retrieves raw Tavily search results.
-3. Rejects jobs, careers, social media, PDFs, news, directories, rankings, top-company lists, generic reports, startup lists, and other obvious non-company pages.
-4. Deduplicates domains before deeper inspection.
-5. Fetches each remaining page where possible.
-6. Extracts page title, description, and readable text.
-7. Resolves a possible company name.
-8. Requires both company identity evidence and industrial-operation evidence.
-9. Classifies business type using explicit words found on the page.
-10. Assigns industrial relevance only after the company/entity checks.
-11. Deduplicates again using company name and domain.
-12. Returns no more than 10 reviewable company candidates.
-13. Saves nothing automatically.
+LIVE CANDIDATE TABLE COLUMNS
 
-FILES TO REPLACE
+company_name
+website
+industry
+business_type
+city
+province
+country
+description
+factory_evidence
+industrial_relevance
+source_url
+source_type
+status
+last_checked
+action
 
-1. app/api/discover/route.js
-   Use: tri-axis-v0.1.4-discover-route.txt
+SEARCH SCOPE
 
-2. app/discover/page.js
-   Use: tri-axis-v0.1.4-discover-page.txt
+If City contains a value:
+Search that city.
 
-3. app/layout.js
-   Use: tri-axis-v0.1.4-layout.txt
+If City is blank:
+Search across Pakistan using multiple industrial-location queries.
 
-4. package.json
-   Use: tri-axis-v0.1.4-package-json.txt
-
-ENVIRONMENT VARIABLE REQUIRED
-
-TAVILY_API_KEY
-
-The key must be configured as a Vercel server-side Secret.
-Do not prefix it with NEXT_PUBLIC_.
-
-VALIDATION TEST
-
-Industry:
-Engineering & Fabrication
-
-City:
+Pakistan-wide search currently rotates through:
 Karachi
+Lahore
+Faisalabad
+Gujranwala
+Sialkot
+Rawalpindi
+Islamabad
+Multan
+Hyderabad
+Hub
+Sheikhupura
+Kasur
 
-Expected behavior:
-The page should return a short list of identifiable companies with company names, website links, business type, evidence, source type, and relevance.
+A single request is intentionally bounded.
+The route currently returns up to 30 validated company candidates per batch rather than pretending one request can discover every industrial company in Pakistan.
 
-Unacceptable results:
-- job pages
-- "Top companies..." articles
-- generic lists
-- directories shown as if they are companies
-- market reports
-- careers pages
-- competitor articles
-- social media pages
+IMPORTANT
 
-If no page satisfies the evidence rules, returning 0 companies is correct. The system should never invent a company just to fill the screen.
+Tavily is still a web-search source, not a corporate registry.
+
+The code therefore:
+- rejects obvious junk pages
+- deduplicates domains
+- inspects root websites
+- extracts company identity
+- requires industrial evidence
+- maps the final record to Supabase columns
+- saves nothing automatically
+
+FILES
+
+1. tri-axis-v0.1.5-discover-route.txt
+   -> app/api/discover/route.js
+
+2. tri-axis-v0.1.5-discover-page.txt
+   -> app/discover/page.js
+
+3. tri-axis-v0.1.5-css-addon.txt
+   -> APPEND to app/globals.css
+
+4. tri-axis-v0.1.5-layout.txt
+   -> app/layout.js
+
+5. tri-axis-v0.1.5-package-json.txt
+   -> package.json
