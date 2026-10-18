@@ -1,43 +1,25 @@
-# Tri Axis v0.1.2 — Industrial Prospect Intelligence
+# Tri Axis v0.1.3 — Live Discovery Foundation
 
-Current working milestone for Tri Axis Supply Company.
-
-## What changed in v0.1.2
-
-- Correct dashboard metric logic
-  - Companies Discovered = all saved companies
-  - High Relevance = only `industrial_relevance = High`
-  - Reviewed = only `status = Reviewed`
-  - Cities Covered = unique, non-empty cities
-- Better dashboard empty state
-- Discover page loading and connection states
-- Discover page no-match state
-- Industry filter now includes industries found in live Supabase data
-- More tolerant matching for status, relevance, industry and city values
-- Existing Supabase connection remains unchanged
-
-## Current scope
-
-- Dashboard
+Current scope:
 - Supabase-backed prospect database
-- Prospect discovery workspace
-- Industry/city/relevance filtering
-- Evidence-first prospect cards
-- High/Medium/Low/Unknown relevance model
-- Duplicate protection utility
-- Responsive UI
+- Dashboard counters
+- Live company discovery search
+- Evidence snippets and source URLs
+- Candidate review before save
+- Duplicate protection on save
+- Saved prospect filtering
 
-## Deliberately not included yet
+## Environment variables
 
-- Live company discovery provider
-- Contact intelligence
-- Email automation
-- RFQ processing
-- Quotations
-- Orders / receivables
-- Supplier management
-- AI assistant
+Existing:
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-## Next milestone
+New for live discovery:
+- TAVILY_API_KEY
 
-Build the live Pakistan company discovery engine, validate the first 100 prospects, then freeze the discovery baseline.
+`TAVILY_API_KEY` must be added in Vercel as a Secret environment variable. Do not prefix it with `NEXT_PUBLIC_`.
+
+## Discovery philosophy
+
+Search results are candidates, not verified customers. Tri Axis shows the source and evidence first, and a user explicitly saves a candidate after review.
