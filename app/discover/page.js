@@ -1,14 +1,18 @@
 'use client'
 
-// TRI AXIS v0.1.4
+// TRI AXIS v0.1.5
 // FILE DESTINATION: app/discover/page.js
 //
-// This page deliberately separates:
-// A) live discovery candidates returned from /api/discover
-// B) saved prospects already stored in Supabase via /api/prospects
+// DESIGN RULE FOR THIS VERSION:
+// Show data as a compact table aligned to the Supabase companies table.
+// Do not force the user to read large research cards.
 //
-// A live search result is NEVER saved automatically.
-// The user must explicitly click "Save Prospect".
+// Candidate columns are the exact commercial fields the platform needs.
+// Long text fields are truncated in the table and shown in full on hover/title.
+//
+// City is optional:
+// - Fill City to search one city.
+// - Leave City blank to search Pakistan-wide.
 
 import { useEffect, useMemo, useState } from 'react'
 
@@ -27,9 +31,9 @@ const industries = [
 ]
 
 export default function DiscoverPage() {
-  const [rows, setRows] = useState([])
+  const [saved, setSaved] = useState([])
   const [industry, setIndustry] = useState('Engineering & Fabrication')
-  const [city, setCity] = useState('Karachi')
+  const [city, setCity] = useState('')
   const [relevance, setRelevance] = useState('All')
   const [query, setQuery] = useState('')
 
@@ -37,10 +41,14 @@ export default function DiscoverPage() {
   const [discovering, setDiscovering] = useState(false)
   const [error, setError] = useState('')
   const [candidates, setCandidates] = useState([])
-  const [searchMeta, setSearchMeta] = useState(null)
+  const [meta, setMeta] = useState(null)
   const [savingKey, setSavingKey] = useState('')
 
-  async function readJsonSafely(response) {
+  useEffect(() => {
+    loadSaved()
+  }, [])
+
+  async function readJson(response) {
     const text = await response.text()
 
     try {
@@ -52,22 +60,21 @@ export default function DiscoverPage() {
     }
   }
 
-  async function loadSavedProspects() {
+  async function loadSaved() {
     try {
       setLoadingSaved(true)
-      setError('')
 
       const response = await fetch('/api/prospects', {
         cache: 'no-store'
       })
 
-      const data = await readJsonSafely(response)
+      const data = await readJson(response)
 
       if (!response.ok) {
         throw new Error(data?.error || 'Could not load saved prospects.')
       }
 
-      setRows(Array.isArray(data) ? data : [])
+      setSaved(Array.isArray(data) ? data : [])
     } catch (err) {
       setError(err.message || 'Could not load saved prospects.')
     } finally {
@@ -75,62 +82,12 @@ export default function DiscoverPage() {
     }
   }
 
-  useEffect(() => {
-    loadSavedProspects()
-  }, [])
-
-  const filteredSaved = useMemo(() => {
-    return rows.filter(prospect => {
-      if (
-        industry !== 'All Industries' &&
-        safeLower(prospect.industry) !== safeLower(industry)
-      ) {
-        return false
-      }
-
-      if (
-        city &&
-        !safeLower(prospect.city).includes(safeLower(city))
-      ) {
-        return false
-      }
-
-      if (
-        relevance !== 'All' &&
-        safeLower(prospect.industrial_relevance) !== safeLower(relevance)
-      ) {
-        return false
-      }
-
-      if (query) {
-        const searchable = [
-          prospect.company_name,
-          prospect.industry,
-          prospect.business_type,
-          prospect.city,
-          prospect.province,
-          prospect.description,
-          prospect.factory_evidence
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-
-        if (!searchable.includes(query.toLowerCase())) {
-          return false
-        }
-      }
-
-      return true
-    })
-  }, [rows, industry, city, relevance, query])
-
   async function findCompanies() {
     try {
       setDiscovering(true)
       setError('')
       setCandidates([])
-      setSearchMeta(null)
+      setMeta(null)
 
       const response = await fetch('/api/discover', {
         method: 'POST',
@@ -139,15 +96,13 @@ export default function DiscoverPage() {
         },
         body: JSON.stringify({
           industry:
-            industry === 'All Industries'
-              ? ''
-              : industry,
+            industry === 'All Industries' ? '' : industry,
           city,
           query
         })
       })
 
-      const data = await readJsonSafely(response)
+      const data = await readJson(response)
 
       if (!response.ok) {
         throw new Error(data?.error || 'Discovery failed.')
@@ -159,7 +114,7 @@ export default function DiscoverPage() {
           : []
       )
 
-      setSearchMeta(data?.meta || null)
+      setMeta(data?.meta || null)
     } catch (err) {
       setError(err.message || 'Discovery failed.')
     } finally {
@@ -167,7 +122,7 @@ export default function DiscoverPage() {
     }
   }
 
-  async function saveCandidate(candidate) {
+  async function saveProspect(candidate) {
     const key =
       candidate.website ||
       candidate.source_url ||
@@ -185,7 +140,7 @@ export default function DiscoverPage() {
         body: JSON.stringify(candidate)
       })
 
-      const data = await readJsonSafely(response)
+      const data = await readJson(response)
 
       if (!response.ok) {
         throw new Error(
@@ -193,13 +148,41 @@ export default function DiscoverPage() {
         )
       }
 
-      await loadSavedProspects()
+      await loadSaved()
     } catch (err) {
       setError(err.message || 'Could not save prospect.')
     } finally {
       setSavingKey('')
     }
   }
+
+  const filteredSaved = useMemo(() => {
+    return saved.filter(row => {
+      if (
+        industry !== 'All Industries' &&
+        normalize(row.industry) !== normalize(industry)
+      ) {
+        return false
+      }
+
+      if (
+        city &&
+        !normalize(row.city).includes(normalize(city))
+      ) {
+        return false
+      }
+
+      if (
+        relevance !== 'All' &&
+        normalize(row.industrial_relevance) !==
+          normalize(relevance)
+      ) {
+        return false
+      }
+
+      return true
+    })
+  }, [saved, industry, city, relevance])
 
   return (
     <main className="page-shell">
@@ -211,25 +194,25 @@ export default function DiscoverPage() {
         <h1>Discover Companies</h1>
 
         <p className="subtitle">
-          Find actual industrial companies, review the evidence,
-          then choose which prospects belong in the Tri Axis database.
+          Search one city or leave City blank to search across Pakistan.
+          Results are shown as company records aligned to the database.
         </p>
 
         <p className="version-label">
-          Tri Axis v0.1.4 · Company Entity Discovery
+          Tri Axis v0.1.5 · Prospect Table Discovery
         </p>
       </section>
 
       <section className="filter-panel">
         <div className="filter-grid">
           <div className="field">
-            <label>Optional search detail</label>
+            <label>Optional requirement detail</label>
             <input
               value={query}
               onChange={event =>
                 setQuery(event.target.value)
               }
-              placeholder="e.g. CNC machining, steel structures..."
+              placeholder="e.g. CNC machining, pipe fabrication..."
             />
           </div>
 
@@ -256,7 +239,7 @@ export default function DiscoverPage() {
               onChange={event =>
                 setCity(event.target.value)
               }
-              placeholder="Karachi"
+              placeholder="Blank = Pakistan"
             />
           </div>
 
@@ -283,7 +266,7 @@ export default function DiscoverPage() {
             disabled={discovering}
           >
             {discovering
-              ? 'Researching companies...'
+              ? 'Researching...'
               : 'Find Companies'}
           </button>
         </div>
@@ -305,155 +288,33 @@ export default function DiscoverPage() {
             <h2>
               {discovering
                 ? 'Researching...'
-                : `${candidates.length} companies found`}
+                : `${candidates.length} companies`}
             </h2>
           </div>
 
           <p className="muted">
-            Search results are not saved automatically.
+            {meta
+              ? `${meta.scope} · ${meta.pages_inspected || 0} pages inspected`
+              : 'Nothing is saved automatically.'}
           </p>
         </div>
 
         {!discovering &&
-        searchMeta &&
+        meta &&
         candidates.length === 0 ? (
           <div className="empty-state">
-            No company passed the current evidence rules.
-            Try another industry, city, or a more specific search detail.
+            No company passed the evidence rules in this batch.
           </div>
         ) : null}
 
-        {searchMeta ? (
-          <p className="muted">
-            Inspected {searchMeta.pages_inspected || 0} candidate pages
-            from {searchMeta.raw_results_after_basic_filter || 0} filtered
-            search results.
-          </p>
+        {candidates.length > 0 ? (
+          <ProspectTable
+            rows={candidates}
+            candidateMode
+            savingKey={savingKey}
+            onSave={saveProspect}
+          />
         ) : null}
-
-        <div className="candidate-list">
-          {candidates.map((candidate, index) => {
-            const saveKey =
-              candidate.website ||
-              candidate.source_url ||
-              candidate.company_name
-
-            return (
-              <article
-                className="prospect-card"
-                key={`${saveKey}-${index}`}
-              >
-                <div className="prospect-top">
-                  <div>
-                    <h3>
-                      {candidate.company_name ||
-                        'Unknown company'}
-                    </h3>
-
-                    <p className="muted">
-                      {candidate.industry ||
-                        'Industry unknown'}
-                      {candidate.city
-                        ? ` · ${candidate.city}`
-                        : ''}
-                    </p>
-                  </div>
-
-                  <span
-                    className={`badge ${safeLower(
-                      candidate.industrial_relevance ||
-                        'Low'
-                    )}`}
-                  >
-                    {candidate.industrial_relevance ||
-                      'Unknown'}
-                  </span>
-                </div>
-
-                <p className="description">
-                  {candidate.description ||
-                    'No concise company description was available.'}
-                </p>
-
-                <div className="evidence-box">
-                  <span className="evidence-label">
-                    WHY TRI AXIS INCLUDED THIS COMPANY
-                  </span>
-
-                  <p>
-                    {candidate.factory_evidence ||
-                      'Industrial evidence could not be summarized.'}
-                  </p>
-                </div>
-
-                <div className="meta-grid">
-                  <div>
-                    <span className="meta-label">
-                      Business type
-                    </span>
-                    <strong>
-                      {candidate.business_type ||
-                        'Unknown'}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span className="meta-label">
-                      Website
-                    </span>
-
-                    {candidate.website ? (
-                      <a
-                        href={candidate.website}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open website
-                      </a>
-                    ) : (
-                      <strong>Unknown</strong>
-                    )}
-                  </div>
-
-                  <div>
-                    <span className="meta-label">
-                      Evidence source
-                    </span>
-                    <strong>
-                      {candidate.source_type ||
-                        'Unknown'}
-                    </strong>
-                  </div>
-
-                  <div>
-                    <span className="meta-label">
-                      Last checked
-                    </span>
-                    <strong>
-                      {formatDate(
-                        candidate.last_checked
-                      )}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className="card-actions">
-                  <button
-                    className="primary-button"
-                    onClick={() =>
-                      saveCandidate(candidate)
-                    }
-                    disabled={savingKey === saveKey}
-                  >
-                    {savingKey === saveKey
-                      ? 'Saving...'
-                      : 'Save Prospect'}
-                  </button>
-                </div>
-              </article>
-            )
-          })}
-        </div>
       </section>
 
       <section className="saved-section">
@@ -471,7 +332,7 @@ export default function DiscoverPage() {
           </div>
 
           <p className="muted">
-            These records are already stored in Supabase.
+            Already stored in Supabase.
           </p>
         </div>
 
@@ -482,124 +343,183 @@ export default function DiscoverPage() {
           </div>
         ) : null}
 
-        <div className="candidate-list">
-          {filteredSaved.map(prospect => (
-            <article
-              className="prospect-card"
-              key={prospect.id}
-            >
-              <div className="prospect-top">
-                <div>
-                  <h3>
-                    {prospect.company_name ||
-                      'Unknown company'}
-                  </h3>
-
-                  <p className="muted">
-                    {prospect.industry ||
-                      'Industry unknown'}
-                    {prospect.city
-                      ? ` · ${prospect.city}`
-                      : ''}
-                    {prospect.province
-                      ? `, ${prospect.province}`
-                      : ''}
-                  </p>
-                </div>
-
-                <span
-                  className={`badge ${safeLower(
-                    prospect.industrial_relevance ||
-                      'Low'
-                  )}`}
-                >
-                  {prospect.industrial_relevance ||
-                    'Unknown'}
-                </span>
-              </div>
-
-              <p className="description">
-                {prospect.description ||
-                  'No company description available yet.'}
-              </p>
-
-              <div className="evidence-box">
-                <span className="evidence-label">
-                  INDUSTRIAL EVIDENCE
-                </span>
-
-                <p>
-                  {prospect.factory_evidence ||
-                    'Industrial evidence not recorded yet.'}
-                </p>
-              </div>
-
-              <div className="meta-grid">
-                <div>
-                  <span className="meta-label">
-                    Business type
-                  </span>
-                  <strong>
-                    {prospect.business_type ||
-                      'Unknown'}
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="meta-label">
-                    Website
-                  </span>
-
-                  {prospect.website ? (
-                    <a
-                      href={prospect.website}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open website
-                    </a>
-                  ) : (
-                    <strong>Unknown</strong>
-                  )}
-                </div>
-
-                <div>
-                  <span className="meta-label">
-                    Status
-                  </span>
-                  <strong>
-                    {prospect.status ||
-                      'Discovered'}
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="meta-label">
-                    Last checked
-                  </span>
-                  <strong>
-                    {formatDate(
-                      prospect.last_checked
-                    )}
-                  </strong>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+        {filteredSaved.length > 0 ? (
+          <ProspectTable rows={filteredSaved} />
+        ) : null}
       </section>
     </main>
   )
 }
 
-function safeLower(value) {
-  return String(value || '').toLowerCase()
+function ProspectTable({
+  rows,
+  candidateMode = false,
+  savingKey = '',
+  onSave
+}) {
+  return (
+    <div className="table-wrap prospect-table-wrap">
+      <table className="prospect-data-table">
+        <thead>
+          <tr>
+            <th>Company Name</th>
+            <th>Website</th>
+            <th>Industry</th>
+            <th>Business Type</th>
+            <th>City</th>
+            <th>Province</th>
+            <th>Country</th>
+            <th>Description</th>
+            <th>Factory Evidence</th>
+            <th>Relevance</th>
+            <th>Source URL</th>
+            <th>Source Type</th>
+            <th>Status</th>
+            <th>Last Checked</th>
+            {candidateMode ? <th>Action</th> : null}
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.map((row, index) => {
+            const key =
+              row.id ||
+              row.website ||
+              row.source_url ||
+              `${row.company_name}-${index}`
+
+            const saveKey =
+              row.website ||
+              row.source_url ||
+              row.company_name
+
+            return (
+              <tr key={key}>
+                <td className="company-cell">
+                  <strong>
+                    {value(row.company_name)}
+                  </strong>
+                </td>
+
+                <td>
+                  {row.website ? (
+                    <a
+                      href={row.website}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open
+                    </a>
+                  ) : (
+                    'Unknown'
+                  )}
+                </td>
+
+                <td>{value(row.industry)}</td>
+                <td>{value(row.business_type)}</td>
+                <td>{value(row.city)}</td>
+                <td>{value(row.province)}</td>
+                <td>{value(row.country)}</td>
+
+                <td
+                  className="long-cell"
+                  title={value(row.description)}
+                >
+                  {truncate(row.description, 120)}
+                </td>
+
+                <td
+                  className="long-cell"
+                  title={value(row.factory_evidence)}
+                >
+                  {truncate(row.factory_evidence, 140)}
+                </td>
+
+                <td>
+                  <span
+                    className={`badge ${badgeClass(
+                      row.industrial_relevance
+                    )}`}
+                  >
+                    {value(row.industrial_relevance)}
+                  </span>
+                </td>
+
+                <td>
+                  {row.source_url ? (
+                    <a
+                      href={row.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Source
+                    </a>
+                  ) : (
+                    'Unknown'
+                  )}
+                </td>
+
+                <td>{value(row.source_type)}</td>
+                <td>{value(row.status)}</td>
+
+                <td>
+                  {formatDate(row.last_checked)}
+                </td>
+
+                {candidateMode ? (
+                  <td>
+                    <button
+                      className="table-action-button"
+                      onClick={() => onSave(row)}
+                      disabled={savingKey === saveKey}
+                    >
+                      {savingKey === saveKey
+                        ? 'Saving...'
+                        : 'Save'}
+                    </button>
+                  </td>
+                ) : null}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
-function formatDate(value) {
-  if (!value) return 'Unknown'
+function value(input) {
+  const text = String(input || '').trim()
+  return text || 'Unknown'
+}
 
-  const date = new Date(value)
+function normalize(input) {
+  return String(input || '').trim().toLowerCase()
+}
+
+function truncate(input, limit) {
+  const text = value(input)
+
+  if (text === 'Unknown') return text
+  if (text.length <= limit) return text
+
+  return `${text.slice(0, limit)}…`
+}
+
+function badgeClass(input) {
+  const text = normalize(input)
+
+  if (text === 'high') return 'high'
+  if (text === 'medium') return 'medium'
+  if (text === 'low') return 'low'
+
+  return 'medium'
+}
+
+function formatDate(input) {
+  if (!input) return 'Unknown'
+
+  const date = new Date(input)
 
   if (Number.isNaN(date.getTime())) {
     return 'Unknown'
