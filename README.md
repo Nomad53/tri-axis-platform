@@ -1,4 +1,4 @@
-# Tri Axis v0.1 — Industrial Prospect Intelligence
+# Tri Axis v0.1.1 — Supabase Connected
 
 First working milestone for Tri Axis Supply Company.
 
@@ -9,7 +9,7 @@ First working milestone for Tri Axis Supply Company.
 - Evidence-first prospect cards
 - High/Medium/Low relevance model
 - Duplicate protection utility
-- Mock prospect API
+- Supabase-backed prospect API
 - Responsive UI
 
 ## Deliberately not included yet
@@ -29,4 +29,14 @@ npm run dev
 Open http://localhost:3000
 
 ## Next build
-Replace mock prospect data with the first live discovery provider and persist prospects in Supabase.
+Supabase persistence is now connected. Next build: add the first live discovery provider and write validated prospects into the companies table.
+
+
+## Environment variables
+
+Set these in Vercel:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+The app reads the `public.companies` table through Supabase REST.

@@ -46,9 +46,11 @@ export default function DiscoverPage() {
 
         <div className="sectionHeader"><h2>{filtered.length} prospects</h2><span>Evidence-first · Unknown is allowed</span></div>
 
+        {rows.length === 0 && <div className="panel emptyState"><div><div className="panelLabel">Database connected</div><h2>No prospects yet.</h2><p>Your Supabase companies table is empty. Live discovery will populate it in the next milestone.</p></div></div>}
+
         <div className="cards">
           {filtered.map(p => <article className="prospectCard" key={p.id}>
-            <div className="cardTop"><div><h3>{p.name}</h3><div className="muted">{p.industry} · {p.city}, {p.province}</div></div><span className={`pill ${p.relevance.toLowerCase()}`}>{p.relevance}</span></div>
+            <div className="cardTop"><div><h3>{p.name}</h3><div className="muted">{p.industry} · {p.city}, {p.province}</div></div>{p.relevance !== 'Unknown' && <span className={`pill ${p.relevance.toLowerCase()}`}>{p.relevance}</span>}</div>
             <p>{p.summary}</p>
             <div className="evidence"><strong>Industrial evidence</strong><span>{p.evidence}</span></div>
             <div className="metaGrid">

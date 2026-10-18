@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { getProspects } from '../lib/prospects'
 
-export default function HomePage() {
-  const prospects = getProspects()
+export default async function HomePage() {
+  const prospects = await getProspects()
   const qualified = prospects.filter(p => p.relevance === 'High').length
   const reviewed = prospects.filter(p => p.status !== 'Discovered').length
   const cities = new Set(prospects.map(p => p.city).filter(Boolean)).size
