@@ -1,91 +1,116 @@
 'use client'
 
+// TRI AXIS v0.1.4
+// FILE DESTINATION: app/discover/page.js
+//
+// This page deliberately separates:
+// A) live discovery candidates returned from /api/discover
+// B) saved prospects already stored in Supabase via /api/prospects
+//
+// A live search result is NEVER saved automatically.
+// The user must explicitly click "Save Prospect".
+
 import { useEffect, useMemo, useState } from 'react'
 
 const industries = [
   'All Industries',
   'Automotive',
   'Cement',
+  'Chemicals',
   'Engineering & Fabrication',
   'Food & Beverage',
+  'Packaging',
   'Pharmaceuticals',
-  'Steel & Metals',
-  'Textile',
   'Power & Energy',
-  'Chemicals',
-  'Packaging'
+  'Steel & Metals',
+  'Textile'
 ]
 
 export default function DiscoverPage() {
   const [rows, setRows] = useState([])
-  const [industry, setIndustry] = useState('All Industries')
-  const [city, setCity] = useState('')
+  const [industry, setIndustry] = useState('Engineering & Fabrication')
+  const [city, setCity] = useState('Karachi')
   const [relevance, setRelevance] = useState('All')
   const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(true)
+
+  const [loadingSaved, setLoadingSaved] = useState(true)
   const [discovering, setDiscovering] = useState(false)
   const [error, setError] = useState('')
   const [candidates, setCandidates] = useState([])
-  const [savingUrl, setSavingUrl] = useState('')
+  const [searchMeta, setSearchMeta] = useState(null)
+  const [savingKey, setSavingKey] = useState('')
 
-  async function loadProspects() {
+  async function readJsonSafely(response) {
+    const text = await response.text()
+
     try {
-      setLoading(true)
+      return JSON.parse(text)
+    } catch {
+      throw new Error(
+        `Server returned a non-JSON response (${response.status}).`
+      )
+    }
+  }
+
+  async function loadSavedProspects() {
+    try {
+      setLoadingSaved(true)
       setError('')
 
       const response = await fetch('/api/prospects', {
         cache: 'no-store'
       })
 
+      const data = await readJsonSafely(response)
+
       if (!response.ok) {
-        throw new Error('Could not load prospects')
+        throw new Error(data?.error || 'Could not load saved prospects.')
       }
 
-      const data = await response.json()
       setRows(Array.isArray(data) ? data : [])
     } catch (err) {
-      setError(err.message || 'Could not load prospects')
+      setError(err.message || 'Could not load saved prospects.')
     } finally {
-      setLoading(false)
+      setLoadingSaved(false)
     }
   }
 
   useEffect(() => {
-    loadProspects()
+    loadSavedProspects()
   }, [])
 
-  const filtered = useMemo(() => {
-    return rows.filter((p) => {
+  const filteredSaved = useMemo(() => {
+    return rows.filter(prospect => {
       if (
         industry !== 'All Industries' &&
-        (p.industry || '').toLowerCase() !== industry.toLowerCase()
+        safeLower(prospect.industry) !== safeLower(industry)
       ) {
         return false
       }
 
       if (
         city &&
-        !(p.city || '').toLowerCase().includes(city.toLowerCase())
+        !safeLower(prospect.city).includes(safeLower(city))
       ) {
         return false
       }
 
       if (
         relevance !== 'All' &&
-        (p.industrial_relevance || '').toLowerCase() !== relevance.toLowerCase()
+        safeLower(prospect.industrial_relevance) !== safeLower(relevance)
       ) {
         return false
       }
 
       if (query) {
         const searchable = [
-          p.company_name,
-          p.industry,
-          p.business_type,
-          p.city,
-          p.province,
-          p.description,
-          p.factory_evidence
+          prospect.company_name,
+          prospect.industry,
+          prospect.business_type,
+          prospect.city,
+          prospect.province,
+          prospect.description,
+          prospect.factory_evidence
         ]
           .filter(Boolean)
           .join(' ')
@@ -105,6 +130,7 @@ export default function DiscoverPage() {
       setDiscovering(true)
       setError('')
       setCandidates([])
+      setSearchMeta(null)
 
       const response = await fetch('/api/discover', {
         method: 'POST',
@@ -113,29 +139,42 @@ export default function DiscoverPage() {
         },
         body: JSON.stringify({
           industry:
-            industry === 'All Industries' ? '' : industry,
-          city: city || 'Karachi',
+            industry === 'All Industries'
+              ? ''
+              : industry,
+          city,
           query
         })
       })
 
-      const data = await response.json()
+      const data = await readJsonSafely(response)
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Discovery failed')
+        throw new Error(data?.error || 'Discovery failed.')
       }
 
-      setCandidates(Array.isArray(data?.candidates) ? data.candidates : [])
+      setCandidates(
+        Array.isArray(data?.candidates)
+          ? data.candidates
+          : []
+      )
+
+      setSearchMeta(data?.meta || null)
     } catch (err) {
-      setError(err.message || 'Discovery failed')
+      setError(err.message || 'Discovery failed.')
     } finally {
       setDiscovering(false)
     }
   }
 
   async function saveCandidate(candidate) {
+    const key =
+      candidate.website ||
+      candidate.source_url ||
+      candidate.company_name
+
     try {
-      setSavingUrl(candidate.source_url || candidate.company_name)
+      setSavingKey(key)
       setError('')
 
       const response = await fetch('/api/prospects', {
@@ -146,45 +185,51 @@ export default function DiscoverPage() {
         body: JSON.stringify(candidate)
       })
 
-      const data = await response.json()
+      const data = await readJsonSafely(response)
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Could not save prospect')
+        throw new Error(
+          data?.error || 'Could not save prospect.'
+        )
       }
 
-      await loadProspects()
+      await loadSavedProspects()
     } catch (err) {
-      setError(err.message || 'Could not save prospect')
+      setError(err.message || 'Could not save prospect.')
     } finally {
-      setSavingUrl('')
+      setSavingKey('')
     }
   }
 
   return (
     <main className="page-shell">
       <section className="page-header">
-        <p className="eyebrow">DISCOVERY WORKSPACE</p>
+        <p className="eyebrow">
+          DISCOVERY WORKSPACE
+        </p>
 
         <h1>Discover Companies</h1>
 
         <p className="subtitle">
-          Find, review and validate industrial prospects before adding them to
-          the Tri Axis database.
+          Find actual industrial companies, review the evidence,
+          then choose which prospects belong in the Tri Axis database.
         </p>
 
         <p className="version-label">
-          Tri Axis v0.1.3 · Live Discovery Foundation
+          Tri Axis v0.1.4 · Company Entity Discovery
         </p>
       </section>
 
       <section className="filter-panel">
         <div className="filter-grid">
           <div className="field">
-            <label>Search</label>
+            <label>Optional search detail</label>
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Company, sector, activity..."
+              onChange={event =>
+                setQuery(event.target.value)
+              }
+              placeholder="e.g. CNC machining, steel structures..."
             />
           </div>
 
@@ -192,9 +237,11 @@ export default function DiscoverPage() {
             <label>Industry</label>
             <select
               value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
+              onChange={event =>
+                setIndustry(event.target.value)
+              }
             >
-              {industries.map((item) => (
+              {industries.map(item => (
                 <option key={item} value={item}>
                   {item}
                 </option>
@@ -206,16 +253,20 @@ export default function DiscoverPage() {
             <label>City</label>
             <input
               value={city}
-              onChange={(e) => setCity(e.target.value)}
+              onChange={event =>
+                setCity(event.target.value)
+              }
               placeholder="Karachi"
             />
           </div>
 
           <div className="field">
-            <label>Relevance</label>
+            <label>Saved relevance filter</label>
             <select
               value={relevance}
-              onChange={(e) => setRelevance(e.target.value)}
+              onChange={event =>
+                setRelevance(event.target.value)
+              }
             >
               <option value="All">All</option>
               <option value="High">High</option>
@@ -231,7 +282,9 @@ export default function DiscoverPage() {
             onClick={findCompanies}
             disabled={discovering}
           >
-            {discovering ? 'Searching...' : 'Find Companies'}
+            {discovering
+              ? 'Researching companies...'
+              : 'Find Companies'}
           </button>
         </div>
       </section>
@@ -242,71 +295,120 @@ export default function DiscoverPage() {
         </section>
       ) : null}
 
-      {candidates.length > 0 ? (
-        <section className="candidate-section">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">LIVE DISCOVERY RESULTS</p>
-              <h2>{candidates.length} candidates found</h2>
-            </div>
-            <p className="muted">
-              Review before saving. Nothing is added automatically.
+      <section className="candidate-section">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">
+              LIVE COMPANY CANDIDATES
             </p>
+
+            <h2>
+              {discovering
+                ? 'Researching...'
+                : `${candidates.length} companies found`}
+            </h2>
           </div>
 
-          <div className="candidate-list">
-            {candidates.map((candidate, index) => (
+          <p className="muted">
+            Search results are not saved automatically.
+          </p>
+        </div>
+
+        {!discovering &&
+        searchMeta &&
+        candidates.length === 0 ? (
+          <div className="empty-state">
+            No company passed the current evidence rules.
+            Try another industry, city, or a more specific search detail.
+          </div>
+        ) : null}
+
+        {searchMeta ? (
+          <p className="muted">
+            Inspected {searchMeta.pages_inspected || 0} candidate pages
+            from {searchMeta.raw_results_after_basic_filter || 0} filtered
+            search results.
+          </p>
+        ) : null}
+
+        <div className="candidate-list">
+          {candidates.map((candidate, index) => {
+            const saveKey =
+              candidate.website ||
+              candidate.source_url ||
+              candidate.company_name
+
+            return (
               <article
                 className="prospect-card"
-                key={`${candidate.source_url || candidate.company_name}-${index}`}
+                key={`${saveKey}-${index}`}
               >
                 <div className="prospect-top">
                   <div>
-                    <h3>{candidate.company_name || 'Unknown company'}</h3>
+                    <h3>
+                      {candidate.company_name ||
+                        'Unknown company'}
+                    </h3>
+
                     <p className="muted">
-                      {candidate.industry || 'Industry unknown'}
-                      {candidate.city ? ` · ${candidate.city}` : ''}
+                      {candidate.industry ||
+                        'Industry unknown'}
+                      {candidate.city
+                        ? ` · ${candidate.city}`
+                        : ''}
                     </p>
                   </div>
 
                   <span
-                    className={`badge ${
-                      (candidate.industrial_relevance || 'Medium').toLowerCase()
-                    }`}
+                    className={`badge ${safeLower(
+                      candidate.industrial_relevance ||
+                        'Low'
+                    )}`}
                   >
-                    {candidate.industrial_relevance || 'Medium'}
+                    {candidate.industrial_relevance ||
+                      'Unknown'}
                   </span>
                 </div>
 
                 <p className="description">
-                  {candidate.description || 'No company description available.'}
+                  {candidate.description ||
+                    'No concise company description was available.'}
                 </p>
 
                 <div className="evidence-box">
-                  <span className="evidence-label">INDUSTRIAL EVIDENCE</span>
+                  <span className="evidence-label">
+                    WHY TRI AXIS INCLUDED THIS COMPANY
+                  </span>
+
                   <p>
                     {candidate.factory_evidence ||
-                      'Industrial evidence not yet confirmed.'}
+                      'Industrial evidence could not be summarized.'}
                   </p>
                 </div>
 
                 <div className="meta-grid">
                   <div>
-                    <span className="meta-label">Business type</span>
+                    <span className="meta-label">
+                      Business type
+                    </span>
                     <strong>
-                      {candidate.business_type || 'Unknown'}
+                      {candidate.business_type ||
+                        'Unknown'}
                     </strong>
                   </div>
 
                   <div>
-                    <span className="meta-label">Source</span>
-                    {candidate.source_url ? (
+                    <span className="meta-label">
+                      Website
+                    </span>
+
+                    {candidate.website ? (
                       <a
-                        href={candidate.source_url}
+                        href={candidate.website}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        Open source
+                        Open website
                       </a>
                     ) : (
                       <strong>Unknown</strong>
@@ -314,9 +416,23 @@ export default function DiscoverPage() {
                   </div>
 
                   <div>
-                    <span className="meta-label">Source type</span>
+                    <span className="meta-label">
+                      Evidence source
+                    </span>
                     <strong>
-                      {candidate.source_type || 'Web Search'}
+                      {candidate.source_type ||
+                        'Unknown'}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span className="meta-label">
+                      Last checked
+                    </span>
+                    <strong>
+                      {formatDate(
+                        candidate.last_checked
+                      )}
                     </strong>
                   </div>
                 </div>
@@ -324,72 +440,94 @@ export default function DiscoverPage() {
                 <div className="card-actions">
                   <button
                     className="primary-button"
-                    onClick={() => saveCandidate(candidate)}
-                    disabled={
-                      savingUrl ===
-                      (candidate.source_url || candidate.company_name)
+                    onClick={() =>
+                      saveCandidate(candidate)
                     }
+                    disabled={savingKey === saveKey}
                   >
-                    {savingUrl ===
-                    (candidate.source_url || candidate.company_name)
+                    {savingKey === saveKey
                       ? 'Saving...'
                       : 'Save Prospect'}
                   </button>
                 </div>
               </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+            )
+          })}
+        </div>
+      </section>
 
       <section className="saved-section">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">SAVED PROSPECTS</p>
+            <p className="eyebrow">
+              SAVED PROSPECTS
+            </p>
+
             <h2>
-              {loading ? 'Loading...' : `${filtered.length} prospects`}
+              {loadingSaved
+                ? 'Loading...'
+                : `${filteredSaved.length} prospects`}
             </h2>
           </div>
 
           <p className="muted">
-            Evidence-first · Unknown is allowed
+            These records are already stored in Supabase.
           </p>
         </div>
 
-        {!loading && filtered.length === 0 ? (
+        {!loadingSaved &&
+        filteredSaved.length === 0 ? (
           <div className="empty-state">
             No saved prospects match the current filters.
           </div>
         ) : null}
 
         <div className="candidate-list">
-          {filtered.map((prospect) => (
-            <article className="prospect-card" key={prospect.id}>
+          {filteredSaved.map(prospect => (
+            <article
+              className="prospect-card"
+              key={prospect.id}
+            >
               <div className="prospect-top">
                 <div>
-                  <h3>{prospect.company_name}</h3>
+                  <h3>
+                    {prospect.company_name ||
+                      'Unknown company'}
+                  </h3>
+
                   <p className="muted">
-                    {prospect.industry || 'Industry unknown'}
-                    {prospect.city ? ` · ${prospect.city}` : ''}
-                    {prospect.province ? `, ${prospect.province}` : ''}
+                    {prospect.industry ||
+                      'Industry unknown'}
+                    {prospect.city
+                      ? ` · ${prospect.city}`
+                      : ''}
+                    {prospect.province
+                      ? `, ${prospect.province}`
+                      : ''}
                   </p>
                 </div>
 
                 <span
-                  className={`badge ${
-                    (prospect.industrial_relevance || 'Medium').toLowerCase()
-                  }`}
+                  className={`badge ${safeLower(
+                    prospect.industrial_relevance ||
+                      'Low'
+                  )}`}
                 >
-                  {prospect.industrial_relevance || 'Unknown'}
+                  {prospect.industrial_relevance ||
+                    'Unknown'}
                 </span>
               </div>
 
               <p className="description">
-                {prospect.description || 'No company description available yet.'}
+                {prospect.description ||
+                  'No company description available yet.'}
               </p>
 
               <div className="evidence-box">
-                <span className="evidence-label">INDUSTRIAL EVIDENCE</span>
+                <span className="evidence-label">
+                  INDUSTRIAL EVIDENCE
+                </span>
+
                 <p>
                   {prospect.factory_evidence ||
                     'Industrial evidence not recorded yet.'}
@@ -398,21 +536,27 @@ export default function DiscoverPage() {
 
               <div className="meta-grid">
                 <div>
-                  <span className="meta-label">Business type</span>
+                  <span className="meta-label">
+                    Business type
+                  </span>
                   <strong>
-                    {prospect.business_type || 'Unknown'}
+                    {prospect.business_type ||
+                      'Unknown'}
                   </strong>
                 </div>
 
                 <div>
-                  <span className="meta-label">Website</span>
+                  <span className="meta-label">
+                    Website
+                  </span>
+
                   {prospect.website ? (
                     <a
                       href={prospect.website}
                       target="_blank"
                       rel="noreferrer"
                     >
-                      {prospect.website}
+                      Open website
                     </a>
                   ) : (
                     <strong>Unknown</strong>
@@ -420,16 +564,23 @@ export default function DiscoverPage() {
                 </div>
 
                 <div>
-                  <span className="meta-label">Status</span>
-                  <strong>{prospect.status || 'Discovered'}</strong>
+                  <span className="meta-label">
+                    Status
+                  </span>
+                  <strong>
+                    {prospect.status ||
+                      'Discovered'}
+                  </strong>
                 </div>
 
                 <div>
-                  <span className="meta-label">Last checked</span>
+                  <span className="meta-label">
+                    Last checked
+                  </span>
                   <strong>
-                    {prospect.last_checked
-                      ? new Date(prospect.last_checked).toLocaleDateString()
-                      : 'Unknown'}
+                    {formatDate(
+                      prospect.last_checked
+                    )}
                   </strong>
                 </div>
               </div>
@@ -439,4 +590,20 @@ export default function DiscoverPage() {
       </section>
     </main>
   )
+}
+
+function safeLower(value) {
+  return String(value || '').toLowerCase()
+}
+
+function formatDate(value) {
+  if (!value) return 'Unknown'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown'
+  }
+
+  return date.toLocaleDateString()
 }
