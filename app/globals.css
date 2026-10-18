@@ -1,32 +1,406 @@
 /* TRI AXIS v0.1.5
-   FILE DESTINATION: append these rules to app/globals.css
-   PURPOSE: compact Supabase-aligned discovery tables.
+   FULL REPLACEMENT STYLESHEET
+   DESTINATION: app/globals.css
+
+   IMPORTANT:
+   Replace the ENTIRE contents of app/globals.css with this file.
+   Do not append this to an older stylesheet.
 */
 
-.prospect-table-wrap {
+:root {
+  --bg: #090d12;
+  --sidebar: #0d1218;
+  --panel: #10161d;
+  --panel-soft: #0d1319;
+  --border: #24303b;
+  --border-soft: #1d2731;
+  --text: #f4f6f8;
+  --muted: #90a0b3;
+  --blue: #9bb9dc;
+  --accent: #f5c84b;
+  --accent-hover: #ffd866;
+  --green-bg: #133b27;
+  --green-border: #235b3c;
+  --green-text: #c6f7d8;
+  --yellow-bg: #4a3b12;
+  --yellow-border: #6d5718;
+  --yellow-text: #ffeaa0;
+  --red-bg: #44211e;
+  --red-border: #6a302c;
+  --red-text: #ffc8c3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--blue);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 28px 18px 20px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar);
+  display: flex;
+  flex-direction: column;
+}
+
+.brand {
+  margin-bottom: 30px;
+}
+
+.brand-title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.brand-subtitle {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.sidebar-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-nav a {
+  display: block;
+  padding: 12px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.sidebar-nav a:hover {
+  background: #1a222b;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  color: #72869b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.main-content {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.page-shell {
+  width: 100%;
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 40px 38px 64px;
+}
+
+.page-header {
+  margin-bottom: 26px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #9fb5cd;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin-bottom: 10px;
+  font-size: clamp(34px, 4vw, 52px);
+  line-height: 1.03;
+  letter-spacing: -0.035em;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+h3 {
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--blue);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.version-label {
+  margin: 10px 0 0;
+  color: #7f91a5;
+  font-size: 12px;
+}
+
+.filter-panel,
+.metric-card,
+.milestone-card,
+.empty-state,
+.error-box {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.filter-panel {
+  padding: 18px;
+  margin-bottom: 28px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.9fr 0.8fr;
+  gap: 12px;
+}
+
+.field {
+  min-width: 0;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  color: #8499ae;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #2c3946;
+  border-radius: 8px;
+  outline: none;
+  background: #0c1218;
+  color: var(--text);
+}
+
+.field input::placeholder {
+  color: #647488;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: #536a80;
+}
+
+.discover-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.primary-button,
+.table-action-button {
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #101010;
+  font-weight: 900;
+}
+
+.primary-button {
+  min-height: 40px;
+  padding: 0 18px;
+}
+
+.table-action-button {
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.primary-button:hover,
+.table-action-button:hover {
+  background: var(--accent-hover);
+}
+
+.primary-button:disabled,
+.table-action-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.section-heading {
+  margin: 0 0 14px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.candidate-section {
+  margin-bottom: 34px;
+}
+
+.saved-section {
+  margin-top: 34px;
+}
+
+.error-box {
+  margin: 0 0 24px;
+  padding: 14px 16px;
+  color: #ffc7c1;
+  border-color: #5e2c29;
+  background: #2a1715;
+}
+
+.empty-state {
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 26px 0;
+}
+
+.metric-card {
+  padding: 22px;
+}
+
+.metric-value {
+  margin: 0 0 8px;
+  font-size: 36px;
+  font-weight: 900;
+}
+
+.metric-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.milestone-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 0 0 34px;
+  padding: 24px 26px;
+}
+
+.table-wrap {
   width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 14px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+th {
+  background: #111820;
+  color: #8da2b8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+td {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  vertical-align: top;
+}
+
+tr:last-child td {
+  border-bottom: 0;
 }
 
 .prospect-data-table {
   min-width: 2200px;
-  table-layout: auto;
 }
 
 .prospect-data-table th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #111820;
-  white-space: nowrap;
 }
 
 .prospect-data-table td {
-  vertical-align: top;
   min-width: 110px;
   max-width: 260px;
-  font-size: 13px;
-  line-height: 1.45;
 }
 
 .prospect-data-table .company-cell {
@@ -40,21 +414,89 @@
   white-space: normal;
 }
 
-.table-action-button {
-  min-height: 34px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #111;
-  font-weight: 800;
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
-.table-action-button:hover {
-  background: var(--accent-hover);
+.badge.high {
+  color: var(--green-text);
+  background: var(--green-bg);
+  border-color: var(--green-border);
 }
 
-.table-action-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.badge.medium {
+  color: var(--yellow-text);
+  background: var(--yellow-bg);
+  border-color: var(--yellow-border);
+}
+
+.badge.low {
+  color: var(--red-text);
+  background: var(--red-bg);
+  border-color: var(--red-border);
+}
+
+@media (max-width: 1100px) {
+  .filter-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-nav {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
+  .page-shell {
+    padding: 26px 16px 44px;
+  }
+
+  .filter-grid,
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading,
+  .milestone-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .discover-actions {
+    justify-content: stretch;
+  }
+
+  .primary-button {
+    width: 100%;
+  }
 }
