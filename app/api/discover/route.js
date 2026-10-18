@@ -1,24 +1,21 @@
-// TRI AXIS v0.1.4
+// TRI AXIS v0.1.5
 // FILE DESTINATION: app/api/discover/route.js
 //
-// PURPOSE
-// This route does NOT assume that a web-search result is already a company.
-// It deliberately performs several steps:
+// GOAL:
+// Return actual industrial company records, not generic web pages.
 //
-// 1. Build several targeted search queries from the user's industry + city.
-// 2. Ask Tavily for raw web-search results.
-// 3. Reject obvious non-company pages such as jobs, news, "top companies" lists,
-//    directories, market reports, PDFs, social profiles, and generic articles.
-// 4. Normalize each remaining result into a possible company entity.
-// 5. Fetch the page itself where possible.
-// 6. Look for evidence that the entity is actually an industrial business.
-// 7. Determine a business type from explicit text.
-// 8. Assign High / Medium / Low relevance only AFTER the company check.
-// 9. Deduplicate by domain and normalized company name.
-// 10. Return a short list of actual company candidates for human review.
+// THIS VERSION CHANGES THE SEARCH MODEL:
 //
-// IMPORTANT
-// "Unknown" is valid. The code never invents missing data.
+// 1. If City is blank, search across Pakistan using multiple industrial-city queries.
+// 2. Search multiple query patterns, not one.
+// 3. Pull a larger raw result pool.
+// 4. Reject obvious junk pages before deeper inspection.
+// 5. Prefer root/homepage URLs.
+// 6. Derive company identity primarily from the domain/root site, not generic page titles.
+// 7. Keep every returned record aligned to the Supabase companies table.
+// 8. Return up to 30 company candidates per search batch.
+// 9. Unknown values are allowed. Nothing is invented.
+// 10. Search candidates are never saved automatically.
 
 import { NextResponse } from 'next/server'
 
@@ -26,6 +23,21 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const TAVILY_URL = 'https://api.tavily.com/search'
+
+const PAKISTAN_INDUSTRIAL_LOCATIONS = [
+  'Karachi',
+  'Lahore',
+  'Faisalabad',
+  'Gujranwala',
+  'Sialkot',
+  'Rawalpindi',
+  'Islamabad',
+  'Multan',
+  'Hyderabad',
+  'Hub',
+  'Sheikhupura',
+  'Kasur'
+]
 
 const BLOCKED_DOMAINS = [
   'linkedin.com',
@@ -43,7 +55,12 @@ const BLOCKED_DOMAINS = [
   'wikipedia.org',
   'scribd.com',
   'slideshare.net',
-  'researchgate.net'
+  'researchgate.net',
+  'lookup.pk',
+  'businesslist.pk',
+  'urdupoint.com',
+  'dawn.com',
+  'tribune.com.pk'
 ]
 
 const BLOCKED_PATH_WORDS = [
@@ -59,6 +76,7 @@ const BLOCKED_PATH_WORDS = [
   '/category/',
   '/tag/',
   '/wp-content/',
+  '/directory/',
   '.pdf'
 ]
 
@@ -87,34 +105,20 @@ const BLOCKED_TITLE_WORDS = [
   'yellow pages'
 ]
 
-const COMPANY_WORDS = [
-  'company',
-  'private limited',
-  'pvt ltd',
-  'pvt. ltd',
-  'limited',
-  'ltd',
-  'industries',
-  'industry',
-  'engineering',
-  'works',
-  'manufacturing',
-  'manufacturer',
+const GENERIC_PAGE_TITLES = new Set([
+  'home',
+  'about',
+  'about us',
+  'contact',
+  'contact us',
   'fabrication',
-  'fabricators',
-  'steel',
-  'textile',
-  'pharma',
-  'pharmaceutical',
-  'foods',
-  'cement',
-  'chemicals',
-  'packaging',
-  'motors',
-  'cables',
-  'power',
-  'energy'
-]
+  'engineering',
+  'manufacturing',
+  'services',
+  'products',
+  'careers',
+  'welcome'
+])
 
 const INDUSTRIAL_WORDS = [
   'manufacturing',
@@ -144,36 +148,18 @@ const INDUSTRIAL_WORDS = [
   'production facility'
 ]
 
-const GENERIC_WORDS = new Set([
-  'home',
-  'about',
-  'contact',
-  'official',
-  'website',
-  'pakistan',
-  'karachi',
-  'lahore',
-  'islamabad',
-  'faisalabad',
-  'company',
-  'companies',
-  'manufacturer',
-  'manufacturing',
-  'engineering'
-])
-
-function safeLower(value) {
+function lower(value) {
   return String(value || '').toLowerCase()
 }
 
-function cleanText(value) {
+function clean(value) {
   return String(value || '')
     .replace(/\s+/g, ' ')
     .replace(/\u00a0/g, ' ')
     .trim()
 }
 
-function getHostname(url) {
+function hostnameOf(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '').toLowerCase()
   } catch {
@@ -181,42 +167,34 @@ function getHostname(url) {
   }
 }
 
-function isBlockedDomain(url) {
-  const hostname = getHostname(url)
+function rootUrl(url) {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.protocol}//${parsed.hostname}/`
+  } catch {
+    return url
+  }
+}
+
+function blockedDomain(url) {
+  const hostname = hostnameOf(url)
   return BLOCKED_DOMAINS.some(
     domain => hostname === domain || hostname.endsWith(`.${domain}`)
   )
 }
 
-function isBlockedPath(url) {
-  const lower = safeLower(url)
-  return BLOCKED_PATH_WORDS.some(word => lower.includes(word))
+function blockedPath(url) {
+  const value = lower(url)
+  return BLOCKED_PATH_WORDS.some(word => value.includes(word))
 }
 
-function hasBlockedTitle(title) {
-  const lower = safeLower(title)
-  return BLOCKED_TITLE_WORDS.some(word => lower.includes(word))
-}
-
-function looksLikeGenericArticle(title, content) {
-  const combined = `${safeLower(title)} ${safeLower(content)}`
-  const articleSignals = [
-    'top companies',
-    'list of companies',
-    'market report',
-    'market trends',
-    'job openings',
-    'apply now',
-    'career opportunities',
-    'competitors',
-    'directory of',
-    'companies based in'
-  ]
-  return articleSignals.some(signal => combined.includes(signal))
+function blockedTitle(title) {
+  const value = lower(title)
+  return BLOCKED_TITLE_WORDS.some(word => value.includes(word))
 }
 
 function stripHtml(html) {
-  return cleanText(
+  return clean(
     String(html || '')
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -230,12 +208,12 @@ function stripHtml(html) {
   )
 }
 
-function extractHtmlTitle(html) {
+function htmlTitle(html) {
   const match = String(html || '').match(/<title[^>]*>([\s\S]*?)<\/title>/i)
-  return match ? cleanText(stripHtml(match[1])) : ''
+  return match ? clean(stripHtml(match[1])) : ''
 }
 
-function extractMetaDescription(html) {
+function metaDescription(html) {
   const text = String(html || '')
   const patterns = [
     /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i,
@@ -243,148 +221,147 @@ function extractMetaDescription(html) {
     /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i,
     /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:description["'][^>]*>/i
   ]
+
   for (const pattern of patterns) {
     const match = text.match(pattern)
-    if (match) return cleanText(match[1])
+    if (match) return clean(match[1])
   }
+
   return ''
 }
 
-function removeTitleSuffixes(title) {
-  let value = cleanText(title)
-
-  // Many official sites use formats like:
-  // "ABC Engineering | Home"
-  // "ABC Engineering - Pakistan"
-  // "ABC Engineering – Official Website"
-  // We keep the first meaningful segment.
-  const parts = value
+function titleSegment(title) {
+  const parts = clean(title)
     .split(/\s+[|–—-]\s+/)
-    .map(x => cleanText(x))
+    .map(clean)
     .filter(Boolean)
 
-  if (parts.length > 1) {
-    const first = parts[0]
-    if (first.length >= 3 && first.length <= 90) value = first
+  for (const part of parts) {
+    if (
+      part.length >= 3 &&
+      part.length <= 90 &&
+      !GENERIC_PAGE_TITLES.has(lower(part)) &&
+      !blockedTitle(part)
+    ) {
+      return part
+    }
   }
 
-  value = value
-    .replace(/\b(home|official website|welcome)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  return value
+  return ''
 }
 
-function companyNameFromTitleOrDomain(title, url) {
-  const titleName = removeTitleSuffixes(title)
-
-  if (
-    titleName &&
-    titleName.length >= 3 &&
-    titleName.length <= 90 &&
-    !hasBlockedTitle(titleName)
-  ) {
-    return titleName
-  }
-
-  const hostname = getHostname(url)
+function nameFromDomain(url) {
+  const hostname = hostnameOf(url)
   if (!hostname) return ''
 
-  const base = hostname.split('.')[0] || ''
-  const words = base
+  const first = hostname.split('.')[0] || ''
+
+  return first
     .replace(/[-_]+/g, ' ')
     .split(' ')
     .filter(Boolean)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-
-  return cleanText(words.join(' '))
+    .join(' ')
+    .trim()
 }
 
-function normalizedCompanyKey(name) {
-  return safeLower(name)
+function deriveCompanyName(pageTitle, searchTitle, url) {
+  const pageCandidate = titleSegment(pageTitle)
+  const searchCandidate = titleSegment(searchTitle)
+
+  if (pageCandidate) return pageCandidate
+  if (searchCandidate) return searchCandidate
+
+  return nameFromDomain(url)
+}
+
+function normalizedKey(name) {
+  return lower(name)
     .replace(/\b(private|pvt|limited|ltd|company|co|pakistan)\b/g, '')
     .replace(/[^a-z0-9]/g, '')
 }
 
-function containsCompanySignal(text) {
-  const lower = safeLower(text)
-  return COMPANY_WORDS.some(word => lower.includes(word))
-}
-
-function countIndustrialSignals(text) {
-  const lower = safeLower(text)
+function industrialSignalCount(text) {
+  const value = lower(text)
   let count = 0
+
   for (const word of INDUSTRIAL_WORDS) {
-    if (lower.includes(word)) count += 1
+    if (value.includes(word)) count += 1
   }
+
   return count
 }
 
 function detectBusinessType(text, industry) {
-  const lower = safeLower(text)
+  const value = lower(text)
 
   const rules = [
-    ['Engineering & Fabrication', ['fabrication', 'fabricator', 'metal fabrication', 'structural steel']],
-    ['Manufacturer', ['manufacturing', 'manufacturer', 'factory', 'production facility', 'plant']],
+    ['Engineering & Fabrication', ['fabrication', 'fabricator', 'structural steel', 'metal fabrication']],
     ['Machine Shop', ['machining', 'cnc', 'machine shop']],
-    ['Steel / Metal Processor', ['steel', 'metalworking', 'foundry', 'forging', 'casting']],
+    ['Steel / Metal Processor', ['foundry', 'forging', 'casting', 'metalworking', 'steel processing']],
     ['Textile Manufacturer', ['textile', 'spinning', 'weaving', 'garments factory']],
     ['Food Processor', ['food processing', 'food manufacturer', 'beverage plant']],
     ['Pharmaceutical Manufacturer', ['pharmaceutical manufacturing', 'pharma manufacturing']],
+    ['Manufacturer', ['manufacturing', 'manufacturer', 'factory', 'production facility', 'production plant']],
     ['Industrial Contractor', ['industrial contractor', 'engineering contractor', 'epc contractor']]
   ]
 
   for (const [label, words] of rules) {
-    if (words.some(word => lower.includes(word))) return label
+    if (words.some(word => value.includes(word))) return label
   }
 
-  if (industry && industry !== 'All Industries') return industry
-  return 'Unknown'
+  return industry || 'Unknown'
 }
 
-function splitSentences(text) {
-  return cleanText(text)
+function detectProvince(city) {
+  const value = lower(city)
+
+  const map = {
+    karachi: 'Sindh',
+    hyderabad: 'Sindh',
+    lahore: 'Punjab',
+    faisalabad: 'Punjab',
+    gujranwala: 'Punjab',
+    sialkot: 'Punjab',
+    rawalpindi: 'Punjab',
+    multan: 'Punjab',
+    sheikhupura: 'Punjab',
+    kasur: 'Punjab',
+    islamabad: 'Islamabad Capital Territory',
+    hub: 'Balochistan'
+  }
+
+  return map[value] || null
+}
+
+function sentences(text) {
+  return clean(text)
     .split(/(?<=[.!?])\s+/)
-    .map(x => cleanText(x))
-    .filter(x => x.length >= 35 && x.length <= 420)
+    .map(clean)
+    .filter(sentence => sentence.length >= 35 && sentence.length <= 420)
 }
 
-function buildEvidence(text) {
-  const sentences = splitSentences(text)
-  const matches = []
+function evidenceFrom(text) {
+  const found = []
 
-  for (const sentence of sentences) {
-    const lower = safeLower(sentence)
-    if (INDUSTRIAL_WORDS.some(word => lower.includes(word))) {
-      matches.push(sentence)
+  for (const sentence of sentences(text)) {
+    if (
+      INDUSTRIAL_WORDS.some(word => lower(sentence).includes(word))
+    ) {
+      found.push(sentence)
     }
-    if (matches.length >= 2) break
+
+    if (found.length >= 2) break
   }
 
-  return cleanText(matches.join(' '))
+  return clean(found.join(' '))
 }
 
-function officialSiteConfidence(url, title, pageText) {
-  const hostname = getHostname(url)
-  if (!hostname) return 0
+function relevanceFor(text, officialSiteResolved) {
+  const signals = industrialSignalCount(text)
 
-  let score = 0
-
-  if (!isBlockedDomain(url) && !isBlockedPath(url)) score += 1
-  if (title && !hasBlockedTitle(title)) score += 1
-  if (containsCompanySignal(`${title} ${pageText.slice(0, 4000)}`)) score += 1
-  if (countIndustrialSignals(pageText.slice(0, 12000)) >= 2) score += 1
-
-  return score
-}
-
-function relevanceFromEvidence(pageText, searchSnippet, officialConfidence) {
-  const combined = `${pageText} ${searchSnippet}`
-  const industrialCount = countIndustrialSignals(combined)
-
-  if (officialConfidence >= 3 && industrialCount >= 3) return 'High'
-  if (officialConfidence >= 2 && industrialCount >= 2) return 'Medium'
+  if (officialSiteResolved && signals >= 4) return 'High'
+  if (signals >= 2) return 'Medium'
   return 'Low'
 }
 
@@ -403,14 +380,17 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 7000) {
   }
 }
 
-async function fetchWebsite(url) {
+async function inspectWebsite(url) {
+  // Inspect the root homepage first.
+  const root = rootUrl(url)
+
   try {
     const response = await fetchWithTimeout(
-      url,
+      root,
       {
         headers: {
           'User-Agent':
-            'Mozilla/5.0 (compatible; TriAxisProspectResearch/0.1.4; +https://tri-axis-platform.vercel.app)'
+            'Mozilla/5.0 (compatible; TriAxisProspectResearch/0.1.5; +https://tri-axis-platform.vercel.app)'
         },
         cache: 'no-store'
       },
@@ -419,15 +399,15 @@ async function fetchWebsite(url) {
 
     if (!response.ok) return null
 
-    const contentType = response.headers.get('content-type') || ''
-    if (!contentType.includes('text/html')) return null
+    const type = response.headers.get('content-type') || ''
+    if (!type.includes('text/html')) return null
 
     const html = await response.text()
 
     return {
-      finalUrl: response.url || url,
-      title: extractHtmlTitle(html),
-      metaDescription: extractMetaDescription(html),
+      rootUrl: response.url || root,
+      title: htmlTitle(html),
+      description: metaDescription(html),
       text: stripHtml(html).slice(0, 30000)
     }
   } catch {
@@ -435,30 +415,37 @@ async function fetchWebsite(url) {
   }
 }
 
-function buildSearchQueries(industry, city, userQuery) {
-  const cleanIndustry =
-    industry && industry !== 'All Industries'
-      ? industry
-      : 'industrial manufacturing'
+function searchQueries(industry, city, userQuery) {
+  const selectedIndustry =
+    clean(industry) || 'industrial manufacturing'
 
-  const cleanCity = cleanText(city) || 'Pakistan'
-  const extra = cleanText(userQuery)
+  const locations = clean(city)
+    ? [clean(city)]
+    : PAKISTAN_INDUSTRIAL_LOCATIONS
 
-  const queries = [
-    `${cleanIndustry} company ${cleanCity} Pakistan official website`,
-    `${cleanIndustry} manufacturer ${cleanCity} Pakistan`,
-    `${cleanIndustry} factory ${cleanCity} Pakistan`,
-    `${cleanIndustry} industrial company ${cleanCity} Pakistan`
-  ]
+  const queryDetail = clean(userQuery)
 
-  if (extra) {
-    queries.unshift(`${extra} ${cleanIndustry} ${cleanCity} Pakistan company`)
+  const queries = []
+
+  for (const location of locations) {
+    queries.push(
+      `${selectedIndustry} manufacturer ${location} Pakistan official website`
+    )
+    queries.push(
+      `${selectedIndustry} company ${location} Pakistan factory`
+    )
+
+    if (queryDetail) {
+      queries.push(
+        `${queryDetail} ${selectedIndustry} ${location} Pakistan company`
+      )
+    }
   }
 
   return [...new Set(queries)]
 }
 
-async function tavilySearch(apiKey, query) {
+async function tavily(apiKey, query) {
   const response = await fetchWithTimeout(
     TAVILY_URL,
     {
@@ -470,7 +457,7 @@ async function tavilySearch(apiKey, query) {
         api_key: apiKey,
         query,
         search_depth: 'advanced',
-        max_results: 10,
+        max_results: 20,
         include_answer: false,
         include_raw_content: false,
         include_images: false
@@ -483,112 +470,92 @@ async function tavilySearch(apiKey, query) {
   const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(`Tavily search failed (${response.status}): ${text.slice(0, 300)}`)
+    throw new Error(
+      `Tavily search failed (${response.status}): ${text.slice(0, 300)}`
+    )
   }
 
-  let data
   try {
-    data = JSON.parse(text)
+    const parsed = JSON.parse(text)
+    return Array.isArray(parsed.results) ? parsed.results : []
   } catch {
     throw new Error('Tavily returned a non-JSON response.')
   }
-
-  return Array.isArray(data.results) ? data.results : []
 }
 
-function rejectRawSearchResult(result) {
-  const title = cleanText(result?.title)
-  const url = cleanText(result?.url)
-  const content = cleanText(result?.content)
+function rawResultAllowed(result) {
+  const title = clean(result?.title)
+  const url = clean(result?.url)
 
-  if (!url || !title) return true
-  if (!/^https?:\/\//i.test(url)) return true
-  if (isBlockedDomain(url)) return true
-  if (isBlockedPath(url)) return true
-  if (hasBlockedTitle(title)) return true
-  if (looksLikeGenericArticle(title, content)) return true
+  if (!title || !url) return false
+  if (!/^https?:\/\//i.test(url)) return false
+  if (blockedDomain(url)) return false
+  if (blockedPath(url)) return false
+  if (blockedTitle(title)) return false
 
-  return false
+  return true
 }
 
-async function turnSearchResultIntoCandidate(result, industry, city) {
-  const searchTitle = cleanText(result.title)
-  const searchSnippet = cleanText(result.content)
-  const searchUrl = cleanText(result.url)
+async function resultToCompany(result, industry, fallbackCity) {
+  const inspected = await inspectWebsite(result.url)
 
-  const page = await fetchWebsite(searchUrl)
+  const website = inspected?.rootUrl || rootUrl(result.url)
+  const pageTitle = inspected?.title || ''
+  const searchTitle = clean(result.title)
+  const searchSnippet = clean(result.content)
+  const pageText = inspected?.text || ''
+  const pageDescription = inspected?.description || ''
 
-  const actualUrl = page?.finalUrl || searchUrl
-  const actualTitle = page?.title || searchTitle
-  const pageDescription = page?.metaDescription || ''
-  const pageText = page?.text || ''
-
-  // Re-check after redirects. A search result can redirect into a job board,
-  // directory, PDF, or generic article.
-  if (isBlockedDomain(actualUrl)) return null
-  if (isBlockedPath(actualUrl)) return null
-  if (hasBlockedTitle(actualTitle)) return null
-  if (looksLikeGenericArticle(actualTitle, `${pageDescription} ${searchSnippet}`)) {
-    return null
-  }
-
-  const companyName = companyNameFromTitleOrDomain(actualTitle, actualUrl)
-  if (!companyName || companyName.length < 3) return null
-
-  // Reject names that are effectively generic search-page labels.
-  const nameWords = safeLower(companyName)
-    .split(/\s+/)
-    .filter(word => word && !GENERIC_WORDS.has(word))
-
-  if (nameWords.length === 0) return null
-
-  const combinedText = cleanText(
-    `${actualTitle}. ${pageDescription}. ${pageText}. ${searchSnippet}`
+  const combined = clean(
+    `${pageTitle}. ${pageDescription}. ${pageText}. ${searchSnippet}`
   )
 
-  const industrialSignals = countIndustrialSignals(combinedText)
-  const companySignal = containsCompanySignal(combinedText)
-  const siteConfidence = officialSiteConfidence(actualUrl, actualTitle, combinedText)
+  const companyName = deriveCompanyName(
+    pageTitle,
+    searchTitle,
+    website
+  )
 
-  // Hard gate:
-  // We do not return a candidate merely because the search engine found a page.
-  // It needs both an identifiable company signal and industrial evidence.
-  if (!companySignal) return null
-  if (industrialSignals < 2) return null
-  if (siteConfidence < 2) return null
+  if (!companyName) return null
+
+  // Reject generic page names even after inspection.
+  if (GENERIC_PAGE_TITLES.has(lower(companyName))) return null
+  if (blockedTitle(companyName)) return null
+
+  const signalCount = industrialSignalCount(combined)
+
+  // A candidate must have multiple explicit industrial signals.
+  if (signalCount < 2) return null
 
   const evidence =
-    buildEvidence(`${pageDescription}. ${pageText}`) ||
-    buildEvidence(searchSnippet) ||
-    'Industrial activity detected, but a concise evidence sentence could not be extracted automatically.'
+    evidenceFrom(`${pageDescription}. ${pageText}`) ||
+    evidenceFrom(searchSnippet)
+
+  if (!evidence) return null
 
   const description =
     pageDescription ||
-    splitSentences(pageText).find(sentence => sentence.length <= 280) ||
-    searchSnippet.slice(0, 280) ||
-    'No concise company description was available.'
+    sentences(pageText).find(sentence => sentence.length <= 320) ||
+    searchSnippet.slice(0, 320) ||
+    'Unknown'
+
+  const city = clean(fallbackCity) || 'Unknown'
 
   return {
     company_name: companyName,
-    website: actualUrl,
-    industry:
-      industry && industry !== 'All Industries'
-        ? industry
-        : 'Industrial',
-    business_type: detectBusinessType(combinedText, industry),
-    city: cleanText(city) || 'Unknown',
-    province: null,
+    website: website || null,
+    industry: industry || 'Industrial',
+    business_type: detectBusinessType(combined, industry),
+    city,
+    province: city === 'Unknown' ? null : detectProvince(city),
     country: 'Pakistan',
-    description: cleanText(description).slice(0, 500),
-    factory_evidence: cleanText(evidence).slice(0, 800),
-    industrial_relevance: relevanceFromEvidence(
-      pageText,
-      searchSnippet,
-      siteConfidence
-    ),
-    source_url: actualUrl,
-    source_type:
-      siteConfidence >= 3 ? 'Likely official company website' : 'Company web page',
+    description: clean(description).slice(0, 500),
+    factory_evidence: clean(evidence).slice(0, 900),
+    industrial_relevance: relevanceFor(combined, Boolean(inspected)),
+    source_url: clean(result.url) || website || null,
+    source_type: inspected
+      ? 'Official/primary website candidate'
+      : 'Web search result',
     status: 'Discovered',
     last_checked: new Date().toISOString()
   }
@@ -610,83 +577,90 @@ export async function POST(request) {
 
     const body = await request.json()
 
-    const industry = cleanText(body?.industry || '')
-    const city = cleanText(body?.city || '')
-    const userQuery = cleanText(body?.query || '')
+    const industry = clean(body?.industry || '')
+    const city = clean(body?.city || '')
+    const userQuery = clean(body?.query || '')
 
-    const queries = buildSearchQueries(industry, city, userQuery)
+    const queries = searchQueries(industry, city, userQuery)
 
-    // Search one query at a time so a single provider error is easier to identify.
     const rawResults = []
 
-    for (const query of queries) {
-      const results = await tavilySearch(apiKey, query)
+    // Keep a practical request cap for serverless execution.
+    // Pakistan-wide search uses the first 12 generated query patterns in a batch.
+    const queryBatch = queries.slice(0, 12)
+
+    for (const query of queryBatch) {
+      const results = await tavily(apiKey, query)
 
       for (const result of results) {
-        if (!rejectRawSearchResult(result)) {
-          rawResults.push(result)
+        if (rawResultAllowed(result)) {
+          rawResults.push({
+            ...result,
+            searched_location:
+              city ||
+              inferLocationFromQuery(query) ||
+              'Unknown'
+          })
         }
       }
     }
 
-    // First deduplication pass: URL/domain level.
-    const uniqueRaw = []
-    const seenUrls = new Set()
+    // Domain-level dedupe before expensive page inspection.
+    const uniqueByDomain = []
+    const seenDomains = new Set()
 
     for (const result of rawResults) {
-      const hostname = getHostname(result.url)
-      const key = hostname || safeLower(result.url)
+      const host = hostnameOf(result.url)
 
-      if (!key || seenUrls.has(key)) continue
-      seenUrls.add(key)
-      uniqueRaw.push(result)
+      if (!host || seenDomains.has(host)) continue
+
+      seenDomains.add(host)
+      uniqueByDomain.push(result)
     }
-
-    // We intentionally inspect only a bounded number of pages.
-    // This keeps the request fast and prevents uncontrolled external crawling.
-    const inspected = uniqueRaw.slice(0, 18)
 
     const candidates = []
 
-    for (const result of inspected) {
-      const candidate = await turnSearchResultIntoCandidate(
+    // Inspect more pages than the old version.
+    // Still bounded so Vercel is not asked to crawl the entire web in one request.
+    for (const result of uniqueByDomain.slice(0, 45)) {
+      const company = await resultToCompany(
         result,
         industry,
-        city
+        result.searched_location
       )
 
-      if (candidate) candidates.push(candidate)
+      if (company) candidates.push(company)
 
-      // Human review is easier with a short list of strong candidates.
-      if (candidates.length >= 10) break
+      if (candidates.length >= 30) break
     }
 
-    // Second deduplication pass: company identity level.
-    const finalCandidates = []
-    const seenCompanyKeys = new Set()
-    const seenDomains = new Set()
+    // Company-level dedupe after identity extraction.
+    const final = []
+    const names = new Set()
+    const domains = new Set()
 
-    for (const candidate of candidates) {
-      const nameKey = normalizedCompanyKey(candidate.company_name)
-      const domainKey = getHostname(candidate.website)
+    for (const company of candidates) {
+      const nameKey = normalizedKey(company.company_name)
+      const domainKey = hostnameOf(company.website)
 
-      if (nameKey && seenCompanyKeys.has(nameKey)) continue
-      if (domainKey && seenDomains.has(domainKey)) continue
+      if (nameKey && names.has(nameKey)) continue
+      if (domainKey && domains.has(domainKey)) continue
 
-      if (nameKey) seenCompanyKeys.add(nameKey)
-      if (domainKey) seenDomains.add(domainKey)
+      if (nameKey) names.add(nameKey)
+      if (domainKey) domains.add(domainKey)
 
-      finalCandidates.push(candidate)
+      final.push(company)
     }
 
     return NextResponse.json({
-      candidates: finalCandidates,
+      candidates: final,
       meta: {
-        version: '0.1.4',
-        queries_used: queries,
-        raw_results_after_basic_filter: uniqueRaw.length,
-        pages_inspected: inspected.length,
-        candidates_returned: finalCandidates.length
+        version: '0.1.5',
+        scope: city || 'Pakistan',
+        query_count: queryBatch.length,
+        filtered_raw_results: uniqueByDomain.length,
+        pages_inspected: Math.min(uniqueByDomain.length, 45),
+        candidates_returned: final.length
       }
     })
   } catch (error) {
@@ -697,9 +671,19 @@ export async function POST(request) {
         error:
           error instanceof Error
             ? error.message
-            : 'Unknown discovery error'
+            : 'Unknown discovery error.'
       },
       { status: 500 }
     )
   }
+}
+
+function inferLocationFromQuery(query) {
+  const value = lower(query)
+
+  return (
+    PAKISTAN_INDUSTRIAL_LOCATIONS.find(location =>
+      value.includes(lower(location))
+    ) || ''
+  )
 }
