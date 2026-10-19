@@ -389,7 +389,8 @@ tr:last-child td {
 }
 
 .prospect-data-table {
-  min-width: 2200px;
+  width: 100%;
+  min-width: 900px;
 }
 
 .prospect-data-table th {
@@ -400,16 +401,16 @@ tr:last-child td {
 
 .prospect-data-table td {
   min-width: 110px;
-  max-width: 260px;
+  max-width: 320px;
 }
 
 .prospect-data-table .company-cell {
-  min-width: 210px;
-  max-width: 260px;
+  min-width: 220px;
+  max-width: 320px;
 }
 
 .prospect-data-table .long-cell {
-  min-width: 280px;
+  min-width: 220px;
   max-width: 360px;
   white-space: normal;
 }
@@ -500,3 +501,188 @@ tr:last-child td {
     width: 100%;
   }
 }
+
+/* =========================================================
+   TRI AXIS v0.3.0 - 5 FIELD COMPANY DATABASE
+========================================================= */
+
+.company-search-panel {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 0 0 28px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.company-search-field {
+  flex: 1;
+}
+
+.company-search-field label {
+  display: block;
+  margin: 0 0 8px;
+  color: #8da2b8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.company-search-field input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  background: #0c1218;
+  color: var(--text);
+}
+
+.company-search-field input::placeholder {
+  color: #647488;
+}
+
+.company-search-field input:focus {
+  border-color: #536a80;
+}
+
+.secondary-button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid #2c3946;
+  border-radius: 8px;
+  background: #1a222b;
+  color: #f4f6f8;
+  font-weight: 800;
+}
+
+.secondary-button:hover {
+  background: #222d38;
+}
+
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.company-metrics {
+  margin-bottom: 28px;
+}
+
+.company-database-section {
+  margin-top: 0;
+}
+
+.company-table-wrap {
+  max-height: calc(100vh - 360px);
+  overflow: auto;
+}
+
+.company-database-table {
+  width: 100%;
+  min-width: 980px;
+  table-layout: fixed;
+}
+
+.company-database-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.company-database-table th:nth-child(1),
+.company-database-table td:nth-child(1) {
+  width: 24%;
+}
+
+.company-database-table th:nth-child(2),
+.company-database-table td:nth-child(2) {
+  width: 18%;
+}
+
+.company-database-table th:nth-child(3),
+.company-database-table td:nth-child(3) {
+  width: 22%;
+}
+
+.company-database-table th:nth-child(4),
+.company-database-table td:nth-child(4) {
+  width: 20%;
+}
+
+.company-database-table th:nth-child(5),
+.company-database-table td:nth-child(5) {
+  width: 16%;
+}
+
+.company-database-table td {
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.company-name-cell {
+  font-weight: 800;
+}
+
+.table-link {
+  color: #8ec5ff;
+  text-decoration: none;
+}
+
+.table-link:hover {
+  text-decoration: underline;
+}
+
+.missing-value {
+  color: #596674;
+}
+
+.dashboard-company-table-wrap {
+  overflow-x: auto;
+}
+
+.dashboard-company-table {
+  min-width: 980px;
+  table-layout: fixed;
+}
+
+.dashboard-company-table th:nth-child(1),
+.dashboard-company-table td:nth-child(1) {
+  width: 24%;
+}
+
+.dashboard-company-table th:nth-child(2),
+.dashboard-company-table td:nth-child(2) {
+  width: 18%;
+}
+
+.dashboard-company-table th:nth-child(3),
+.dashboard-company-table td:nth-child(3) {
+  width: 22%;
+}
+
+.dashboard-company-table th:nth-child(4),
+.dashboard-company-table td:nth-child(4) {
+  width: 20%;
+}
+
+.dashboard-company-table th:nth-child(5),
+.dashboard-company-table td:nth-child(5) {
+  width: 16%;
+}
+
+.dashboard-company-table td {
+  overflow-wrap: anywhere;
+}
+
+.milestone-progress {
+  margin: 14px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
