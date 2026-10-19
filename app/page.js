@@ -1,20 +1,11 @@
 'use client'
 
-// TRI AXIS v0.1.4
-// FILE DESTINATION: app/page.js
+// TRI AXIS v0.2.0
+// COMPLETE REPLACEMENT FILE
+// DESTINATION: app/page.js
 //
-// IMPORTANT:
-// app/layout.js already provides the global sidebar and page shell.
-// This dashboard file must NOT create another sidebar, brand block, or navigation.
-//
-// Dashboard figures are calculated only from records returned by /api/prospects.
-//
-// Rules:
-// - Companies Discovered = every saved prospect row.
-// - High Relevance = industrial_relevance exactly "High" (case-insensitive).
-// - Reviewed = status exactly "Reviewed" (case-insensitive).
-// - Cities Covered = unique non-empty city names.
-// - Missing values are allowed and never guessed.
+// The app version is intentionally NOT hard-coded on this page.
+// Version display is centralized in app/layout.js.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -40,6 +31,7 @@ export default function DashboardPage() {
       const text = await response.text()
 
       let data
+
       try {
         data = JSON.parse(text)
       } catch {
@@ -64,19 +56,18 @@ export default function DashboardPage() {
     const discovered = prospects.length
 
     const highRelevance = prospects.filter(
-      prospect =>
-        normalize(prospect.industrial_relevance) === 'high'
+      prospect => normalize(prospect.industrial_relevance) === 'high'
     ).length
 
     const reviewed = prospects.filter(
-      prospect =>
-        normalize(prospect.status) === 'reviewed'
+      prospect => normalize(prospect.status) === 'reviewed'
     ).length
 
     const uniqueCities = new Set(
       prospects
         .map(prospect => normalizeCity(prospect.city))
         .filter(Boolean)
+        .filter(city => city !== 'unknown')
     )
 
     return {
@@ -107,10 +98,6 @@ export default function DashboardPage() {
         <p className="subtitle">
           Build a clean database of Pakistani companies with credible
           industrial buying potential.
-        </p>
-
-        <p className="version-label">
-          Tri Axis v0.1.4 · Company Entity Discovery
         </p>
       </section>
 
@@ -146,12 +133,11 @@ export default function DashboardPage() {
         <div>
           <p className="eyebrow">CURRENT MILESTONE</p>
 
-          <h2>Find the right companies first.</h2>
+          <h2>Build a trustworthy company universe first.</h2>
 
           <p className="subtitle">
-            Discovery quality comes first. Contacts, outreach, RFQs and
-            finance stay outside this milestone until company discovery is
-            reliable.
+            Discovery validates company identity, Pakistan presence and
+            industrial evidence before a prospect reaches the database.
           </p>
         </div>
 
@@ -177,9 +163,7 @@ export default function DashboardPage() {
           </div>
 
           <p className="muted">
-            {loading
-              ? 'Loading...'
-              : `${prospects.length} total`}
+            {loading ? 'Loading...' : `${prospects.length} total`}
           </p>
         </div>
 
@@ -208,24 +192,16 @@ export default function DashboardPage() {
                   <tr key={prospect.id}>
                     <td>
                       <strong>
-                        {prospect.company_name ||
-                          'Unknown company'}
+                        {prospect.company_name || 'Unknown company'}
                       </strong>
 
                       <div className="muted">
-                        {prospect.website
-                          ? prospect.website
-                          : 'Website unknown'}
+                        {prospect.website || 'Website unknown'}
                       </div>
                     </td>
 
-                    <td>
-                      {prospect.industry || 'Unknown'}
-                    </td>
-
-                    <td>
-                      {prospect.city || 'Unknown'}
-                    </td>
+                    <td>{prospect.industry || 'Unknown'}</td>
+                    <td>{prospect.city || 'Unknown'}</td>
 
                     <td>
                       <span
@@ -233,14 +209,11 @@ export default function DashboardPage() {
                           prospect.industrial_relevance
                         )}`}
                       >
-                        {prospect.industrial_relevance ||
-                          'Unknown'}
+                        {prospect.industrial_relevance || 'Unknown'}
                       </span>
                     </td>
 
-                    <td>
-                      {prospect.status || 'Discovered'}
-                    </td>
+                    <td>{prospect.status || 'Discovered'}</td>
                   </tr>
                 ))}
               </tbody>
