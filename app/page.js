@@ -1,39 +1,60 @@
 'use client'
 
-// TRI AXIS v0.2.0
+// TRI AXIS v0.3.0
 // COMPLETE REPLACEMENT FILE
 // DESTINATION: app/page.js
 //
-// The app version is intentionally NOT hard-coded on this page.
-// Version display is centralized in app/layout.js.
+// Dashboard is aligned to the five-field prospect database.
+// CRM and outreach metrics are intentionally NOT added yet because the
+// project is still at Milestone 2: company information enrichment.
 
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState
+} from 'react'
+
 import Link from 'next/link'
 
 export default function DashboardPage() {
-  const [prospects, setProspects] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [companies, setCompanies] =
+    useState([])
 
-  useEffect(() => {
-    loadProspects()
-  }, [])
+  const [loading, setLoading] =
+    useState(true)
 
-  async function loadProspects() {
+  const [error, setError] =
+    useState('')
+
+  useEffect(
+    () => {
+      loadCompanies()
+    },
+    []
+  )
+
+  async function loadCompanies() {
     try {
       setLoading(true)
       setError('')
 
-      const response = await fetch('/api/prospects', {
-        cache: 'no-store'
-      })
+      const response =
+        await fetch(
+          '/api/prospects',
+          {
+            cache:
+              'no-store'
+          }
+        )
 
-      const text = await response.text()
+      const text =
+        await response.text()
 
       let data
 
       try {
-        data = JSON.parse(text)
+        data =
+          JSON.parse(text)
       } catch {
         throw new Error(
           `Server returned a non-JSON response (${response.status}).`
@@ -41,63 +62,91 @@ export default function DashboardPage() {
       }
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Could not load prospects.')
+        throw new Error(
+          data?.error ||
+          'Could not load companies.'
+        )
       }
 
-      setProspects(Array.isArray(data) ? data : [])
+      setCompanies(
+        Array.isArray(data)
+          ? data
+          : []
+      )
     } catch (err) {
-      setError(err.message || 'Could not load prospects.')
+      setError(
+        err.message ||
+        'Could not load companies.'
+      )
     } finally {
       setLoading(false)
     }
   }
 
-  const metrics = useMemo(() => {
-    const discovered = prospects.length
+  const metrics =
+    useMemo(
+      () => {
+        const total =
+          companies.length
 
-    const highRelevance = prospects.filter(
-      prospect => normalize(prospect.industrial_relevance) === 'high'
-    ).length
+        const websites =
+          countPresent(
+            companies,
+            'Company Website'
+          )
 
-    const reviewed = prospects.filter(
-      prospect => normalize(prospect.status) === 'reviewed'
-    ).length
+        const emails =
+          countPresent(
+            companies,
+            'Company Email'
+          )
 
-    const uniqueCities = new Set(
-      prospects
-        .map(prospect => normalizeCity(prospect.city))
-        .filter(Boolean)
-        .filter(city => city !== 'unknown')
+        const contacts =
+          countPresent(
+            companies,
+            'Company Contact'
+          )
+
+        const readyForEmail =
+          companies.filter(
+            company =>
+              hasValue(
+                company?.['Company Email']
+              )
+          ).length
+
+        return {
+          total,
+          websites,
+          emails,
+          contacts,
+          readyForEmail
+        }
+      },
+      [companies]
     )
 
-    return {
-      discovered,
-      highRelevance,
-      reviewed,
-      citiesCovered: uniqueCities.size
-    }
-  }, [prospects])
-
-  const recentProspects = useMemo(() => {
-    return [...prospects]
-      .sort((a, b) => {
-        const aTime = dateValue(a.created_at || a.last_checked)
-        const bTime = dateValue(b.created_at || b.last_checked)
-        return bTime - aTime
-      })
-      .slice(0, 10)
-  }, [prospects])
+  const recentRows =
+    useMemo(
+      () =>
+        companies.slice(0, 10),
+      [companies]
+    )
 
   return (
     <main className="page-shell">
       <section className="page-header">
-        <p className="eyebrow">M1 · COMPANY DISCOVERY</p>
+        <p className="eyebrow">
+          TRI AXIS · PROSPECTING
+        </p>
 
-        <h1>Industrial Prospect Intelligence</h1>
+        <h1>
+          Prospect Database
+        </h1>
 
         <p className="subtitle">
-          Build a clean database of Pakistani companies with credible
-          industrial buying potential.
+          Milestone 1 is complete. Milestone 2 is to make the company list
+          contactable before automated outreach begins.
         </p>
       </section>
 
@@ -109,113 +158,185 @@ export default function DashboardPage() {
 
       <section className="dashboard-grid">
         <MetricCard
-          value={loading ? '—' : metrics.discovered}
-          label="Companies Discovered"
+          value={
+            loading
+              ? '—'
+              : metrics.total
+          }
+          label="Companies"
         />
 
         <MetricCard
-          value={loading ? '—' : metrics.highRelevance}
-          label="High Relevance"
+          value={
+            loading
+              ? '—'
+              : metrics.websites
+          }
+          label="Websites"
         />
 
         <MetricCard
-          value={loading ? '—' : metrics.reviewed}
-          label="Reviewed"
+          value={
+            loading
+              ? '—'
+              : metrics.emails
+          }
+          label="Emails"
         />
 
         <MetricCard
-          value={loading ? '—' : metrics.citiesCovered}
-          label="Cities Covered"
+          value={
+            loading
+              ? '—'
+              : metrics.contacts
+          }
+          label="Contacts"
         />
       </section>
 
       <section className="milestone-card">
         <div>
-          <p className="eyebrow">CURRENT MILESTONE</p>
+          <p className="eyebrow">
+            CURRENT MILESTONE
+          </p>
 
-          <h2>Build a trustworthy company universe first.</h2>
+          <h2>
+            Complete company contact information.
+          </h2>
 
           <p className="subtitle">
-            Discovery validates company identity, Pakistan presence and
-            industrial evidence before a prospect reaches the database.
+            Company Name, Company Address, Company Website, Company Email and
+            Company Contact are the only working fields required at this stage.
           </p>
+
+          {!loading ? (
+            <p className="milestone-progress">
+              {metrics.readyForEmail} of {metrics.total} companies currently
+              have an email and can eventually enter automated outreach.
+            </p>
+          ) : null}
         </div>
 
         <Link
           href="/discover"
           className="primary-button"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textDecoration: 'none'
+            display:
+              'inline-flex',
+
+            alignItems:
+              'center',
+
+            justifyContent:
+              'center',
+
+            textDecoration:
+              'none'
           }}
         >
-          Open Discover
+          Open Companies
         </Link>
       </section>
 
       <section>
         <div className="section-heading">
           <div>
-            <p className="eyebrow">SAVED PROSPECTS</p>
-            <h2>Recent prospects</h2>
+            <p className="eyebrow">
+              COMPANY DATABASE
+            </p>
+
+            <h2>
+              Company records
+            </h2>
           </div>
 
           <p className="muted">
-            {loading ? 'Loading...' : `${prospects.length} total`}
+            {loading
+              ? 'Loading...'
+              : `${companies.length} total`}
           </p>
         </div>
 
-        {!loading && recentProspects.length === 0 ? (
+        {!loading &&
+        recentRows.length === 0 ? (
           <div className="empty-state">
-            No prospects are saved yet. Use Discover to research and save
-            the first company.
+            No company records found.
           </div>
         ) : null}
 
-        {recentProspects.length > 0 ? (
-          <div className="table-wrap">
-            <table>
+        {recentRows.length > 0 ? (
+          <div className="table-wrap dashboard-company-table-wrap">
+            <table className="dashboard-company-table">
               <thead>
                 <tr>
-                  <th>Company</th>
-                  <th>Industry</th>
-                  <th>City</th>
-                  <th>Relevance</th>
-                  <th>Status</th>
+                  <th>
+                    Company Name
+                  </th>
+
+                  <th>
+                    Company Address
+                  </th>
+
+                  <th>
+                    Company Website
+                  </th>
+
+                  <th>
+                    Company Email
+                  </th>
+
+                  <th>
+                    Company Contact
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {recentProspects.map(prospect => (
-                  <tr key={prospect.id}>
-                    <td>
-                      <strong>
-                        {prospect.company_name || 'Unknown company'}
-                      </strong>
+                {recentRows.map(
+                  (
+                    company,
+                    index
+                  ) => (
+                    <tr
+                      key={
+                        company?.id ||
+                        `${company?.['Company Name'] || 'company'}-${index}`
+                      }
+                    >
+                      <td>
+                        <strong>
+                          {display(
+                            company?.['Company Name']
+                          )}
+                        </strong>
+                      </td>
 
-                      <div className="muted">
-                        {prospect.website || 'Website unknown'}
-                      </div>
-                    </td>
+                      <td>
+                        {display(
+                          company?.['Company Address']
+                        )}
+                      </td>
 
-                    <td>{prospect.industry || 'Unknown'}</td>
-                    <td>{prospect.city || 'Unknown'}</td>
+                      <td>
+                        {display(
+                          company?.['Company Website']
+                        )}
+                      </td>
 
-                    <td>
-                      <span
-                        className={`badge ${badgeClass(
-                          prospect.industrial_relevance
-                        )}`}
-                      >
-                        {prospect.industrial_relevance || 'Unknown'}
-                      </span>
-                    </td>
+                      <td>
+                        {display(
+                          company?.['Company Email']
+                        )}
+                      </td>
 
-                    <td>{prospect.status || 'Discovered'}</td>
-                  </tr>
-                ))}
+                      <td>
+                        {display(
+                          company?.['Company Contact']
+                        )}
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
@@ -225,36 +346,50 @@ export default function DashboardPage() {
   )
 }
 
-function MetricCard({ value, label }) {
+function MetricCard({
+  value,
+  label
+}) {
   return (
     <article className="metric-card">
-      <p className="metric-value">{value}</p>
-      <p className="metric-label">{label}</p>
+      <p className="metric-value">
+        {value}
+      </p>
+
+      <p className="metric-label">
+        {label}
+      </p>
     </article>
   )
 }
 
-function normalize(value) {
-  return String(value || '').trim().toLowerCase()
+function safeText(value) {
+  return String(
+    value || ''
+  ).trim()
 }
 
-function normalizeCity(value) {
-  return String(value || '').trim().toLowerCase()
+function hasValue(value) {
+  return Boolean(
+    safeText(value)
+  )
 }
 
-function badgeClass(value) {
-  const normalized = normalize(value)
-
-  if (normalized === 'high') return 'high'
-  if (normalized === 'medium') return 'medium'
-  if (normalized === 'low') return 'low'
-
-  return 'medium'
+function countPresent(
+  companies,
+  field
+) {
+  return companies.filter(
+    company =>
+      hasValue(
+        company?.[field]
+      )
+  ).length
 }
 
-function dateValue(value) {
-  if (!value) return 0
-
-  const time = new Date(value).getTime()
-  return Number.isNaN(time) ? 0 : time
+function display(value) {
+  return (
+    safeText(value) ||
+    '—'
+  )
 }
