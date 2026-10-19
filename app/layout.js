@@ -1,19 +1,19 @@
-// TRI AXIS v0.2.1
+// TRI AXIS v0.3.0
 // COMPLETE REPLACEMENT FILE
 // DESTINATION: app/layout.js
 
 import './globals.css'
 import Link from 'next/link'
 
-const APP_VERSION = 'v0.2.1'
-const APP_MILESTONE = 'Supabase Field Mapping Fix'
+const APP_VERSION = 'v0.3.0'
+const APP_MILESTONE = '5-Field Prospect Database'
 
 export const metadata = {
   title:
-    'Tri Axis | Industrial Prospect Intelligence',
+    'Tri Axis | Prospect Database',
 
   description:
-    'Industrial prospect discovery and sales intelligence for Tri Axis Supply Company.'
+    'Tri Axis Supply Company prospecting and outreach platform.'
 }
 
 export default function RootLayout({
@@ -40,7 +40,7 @@ export default function RootLayout({
               </Link>
 
               <Link href="/discover">
-                Discover
+                Companies
               </Link>
             </nav>
 
