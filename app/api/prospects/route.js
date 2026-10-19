@@ -1,12 +1,23 @@
-// TRI AXIS v0.2.1
+// TRI AXIS v0.3.0
 // COMPLETE REPLACEMENT FILE
 // DESTINATION: app/api/prospects/route.js
 //
-// BUG FIX:
-// The Supabase table already contains the correct fields such as:
-// company_name, business_type, country, description, etc.
-// Tri Axis must return those EXACT database column names to the UI.
-// No legacy aliases such as name, company, type, location, etc. are used here.
+// SUPABASE SOURCE OF TRUTH
+//
+// This API now reads the EXACT five working columns shown in Supabase:
+//
+// "Company Name"
+// "Company Address"
+// "Company Website"
+// "Company Email"
+// "Company Contact"
+//
+// `id` remains in Supabase as the internal unique identifier but is not
+// shown as a user-facing table column.
+//
+// IMPORTANT:
+// The column names below intentionally include spaces and capital letters
+// because they match the Supabase table exactly.
 
 import { NextResponse } from 'next/server'
 
@@ -15,25 +26,14 @@ export const dynamic = 'force-dynamic'
 
 const TABLE = 'companies'
 
-const COMPANY_COLUMNS = [
-  'id',
-  'company_name',
-  'website',
-  'industry',
-  'business_type',
-  'city',
-  'province',
-  'country',
-  'description',
-  'factory_evidence',
-  'industrial_relevance',
-  'source_url',
-  'source_type',
-  'status',
-  'last_checked',
-  'created_at',
-  'updated_at'
-]
+const FIELD_NAMES = {
+  id: 'id',
+  name: 'Company Name',
+  address: 'Company Address',
+  website: 'Company Website',
+  email: 'Company Email',
+  contact: 'Company Contact'
+}
 
 function getSupabaseConfig() {
   const url = String(
@@ -59,7 +59,7 @@ function getSupabaseConfig() {
   return { url, key }
 }
 
-function headers(key, extra = {}) {
+function makeHeaders(key, extra = {}) {
   return {
     apikey: key,
     Authorization: `Bearer ${key}`,
@@ -68,7 +68,7 @@ function headers(key, extra = {}) {
   }
 }
 
-function nullableText(value) {
+function textOrNull(value) {
   if (
     value === null ||
     value === undefined
@@ -81,126 +81,63 @@ function nullableText(value) {
   return text || null
 }
 
-function requiredText(value, fallback = '') {
-  const text = String(
-    value ?? fallback
-  ).trim()
-
-  return text
-}
-
-function nullableTimestamp(value) {
-  if (!value) return null
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-
-  return date.toISOString()
-}
-
-function normalizeDatabaseRow(row) {
-  // IMPORTANT:
-  // This function deliberately preserves the exact Supabase
-  // column names expected by app/discover/page.js.
-  return {
-    id: row?.id ?? null,
-    company_name: row?.company_name ?? null,
-    website: row?.website ?? null,
-    industry: row?.industry ?? null,
-    business_type: row?.business_type ?? null,
-    city: row?.city ?? null,
-    province: row?.province ?? null,
-    country: row?.country ?? null,
-    description: row?.description ?? null,
-    factory_evidence: row?.factory_evidence ?? null,
-    industrial_relevance:
-      row?.industrial_relevance ?? null,
-    source_url: row?.source_url ?? null,
-    source_type: row?.source_type ?? null,
-    status: row?.status ?? null,
-    last_checked: row?.last_checked ?? null,
-    created_at: row?.created_at ?? null,
-    updated_at: row?.updated_at ?? null
-  }
-}
-
-function buildInsertRow(body) {
-  const now = new Date().toISOString()
-
+function normalizeCompany(row) {
   return {
     id:
-      requiredText(body?.id) ||
-      crypto.randomUUID(),
+      row?.[FIELD_NAMES.id] ?? null,
 
-    company_name:
-      requiredText(body?.company_name),
+    'Company Name':
+      row?.[FIELD_NAMES.name] ?? null,
 
-    website:
-      nullableText(body?.website),
+    'Company Address':
+      row?.[FIELD_NAMES.address] ?? null,
 
-    industry:
-      nullableText(body?.industry),
+    'Company Website':
+      row?.[FIELD_NAMES.website] ?? null,
 
-    business_type:
-      nullableText(body?.business_type),
+    'Company Email':
+      row?.[FIELD_NAMES.email] ?? null,
 
-    city:
-      nullableText(body?.city),
-
-    province:
-      nullableText(body?.province),
-
-    country:
-      requiredText(
-        body?.country,
-        'Pakistan'
-      ) || 'Pakistan',
-
-    description:
-      nullableText(body?.description),
-
-    factory_evidence:
-      nullableText(body?.factory_evidence),
-
-    industrial_relevance:
-      nullableText(
-        body?.industrial_relevance
-      ),
-
-    source_url:
-      nullableText(body?.source_url),
-
-    source_type:
-      nullableText(body?.source_type),
-
-    status:
-      requiredText(
-        body?.status,
-        'Discovered'
-      ) || 'Discovered',
-
-    last_checked:
-      nullableTimestamp(
-        body?.last_checked
-      ),
-
-    created_at:
-      nullableTimestamp(
-        body?.created_at
-      ) || now,
-
-    updated_at:
-      nullableTimestamp(
-        body?.updated_at
-      ) || now
+    'Company Contact':
+      row?.[FIELD_NAMES.contact] ?? null
   }
 }
 
-async function parseResponse(response) {
-  const text = await response.text()
+function buildCompanyPayload(body) {
+  const companyName =
+    textOrNull(
+      body?.[FIELD_NAMES.name]
+    )
+
+  return {
+    [FIELD_NAMES.name]:
+      companyName,
+
+    [FIELD_NAMES.address]:
+      textOrNull(
+        body?.[FIELD_NAMES.address]
+      ),
+
+    [FIELD_NAMES.website]:
+      textOrNull(
+        body?.[FIELD_NAMES.website]
+      ),
+
+    [FIELD_NAMES.email]:
+      textOrNull(
+        body?.[FIELD_NAMES.email]
+      ),
+
+    [FIELD_NAMES.contact]:
+      textOrNull(
+        body?.[FIELD_NAMES.contact]
+      )
+  }
+}
+
+async function readResponse(response) {
+  const text =
+    await response.text()
 
   if (!text) return null
 
@@ -211,39 +148,63 @@ async function parseResponse(response) {
   }
 }
 
+function sortCompanies(rows) {
+  return [...rows].sort(
+    (a, b) => {
+      const aName =
+        String(
+          a?.['Company Name'] || ''
+        ).trim()
+
+      const bName =
+        String(
+          b?.['Company Name'] || ''
+        ).trim()
+
+      return aName.localeCompare(
+        bName,
+        'en',
+        {
+          sensitivity: 'base'
+        }
+      )
+    }
+  )
+}
+
 export async function GET() {
   try {
     const { url, key } =
       getSupabaseConfig()
 
-    const select =
-      COMPANY_COLUMNS.join(',')
-
-    // Supabase/PostgREST defaults can limit returned records.
-    // Range 0-4999 ensures the full seed database is returned
-    // without silently stopping at a small default page.
+    // We deliberately request all database columns here rather than
+    // relying on quoted PostgREST select syntax for columns that contain
+    // spaces. The API response below exposes only the exact five working
+    // fields plus the hidden internal id.
     const endpoint =
-      `${url}/rest/v1/${TABLE}` +
-      `?select=${encodeURIComponent(select)}` +
-      `&order=company_name.asc`
+      `${url}/rest/v1/${TABLE}?select=*`
 
-    const response = await fetch(
-      endpoint,
-      {
-        method: 'GET',
-        headers: headers(
-          key,
-          {
-            Range: '0-4999',
-            Prefer: 'count=exact'
-          }
-        ),
-        cache: 'no-store'
-      }
-    )
+    const response =
+      await fetch(
+        endpoint,
+        {
+          method: 'GET',
+
+          headers:
+            makeHeaders(
+              key,
+              {
+                Range: '0-4999',
+                Prefer: 'count=exact'
+              }
+            ),
+
+          cache: 'no-store'
+        }
+      )
 
     const data =
-      await parseResponse(response)
+      await readResponse(response)
 
     if (!response.ok) {
       console.error(
@@ -255,23 +216,27 @@ export async function GET() {
         {
           error:
             'Could not load companies from Supabase.',
-          details: data
+
+          details:
+            data
         },
         {
-          status: response.status
+          status:
+            response.status
         }
       )
     }
 
     const rows =
       Array.isArray(data)
-        ? data.map(normalizeDatabaseRow)
+        ? data.map(normalizeCompany)
         : []
 
     return NextResponse.json(
-      rows,
+      sortCompanies(rows),
       {
         status: 200,
+
         headers: {
           'Cache-Control':
             'no-store, no-cache, must-revalidate'
@@ -289,7 +254,7 @@ export async function GET() {
         error:
           error instanceof Error
             ? error.message
-            : 'Could not load prospects.'
+            : 'Could not load companies.'
       },
       {
         status: 500
@@ -306,14 +271,16 @@ export async function POST(request) {
     const body =
       await request.json()
 
-    const row =
-      buildInsertRow(body)
+    const payload =
+      buildCompanyPayload(body)
 
-    if (!row.company_name) {
+    if (
+      !payload[FIELD_NAMES.name]
+    ) {
       return NextResponse.json(
         {
           error:
-            'company_name is required.'
+            '"Company Name" is required.'
         },
         {
           status: 400
@@ -324,24 +291,31 @@ export async function POST(request) {
     const endpoint =
       `${url}/rest/v1/${TABLE}`
 
-    const response = await fetch(
-      endpoint,
-      {
-        method: 'POST',
-        headers: headers(
-          key,
-          {
-            Prefer:
-              'return=representation'
-          }
-        ),
-        body: JSON.stringify(row),
-        cache: 'no-store'
-      }
-    )
+    const response =
+      await fetch(
+        endpoint,
+        {
+          method: 'POST',
+
+          headers:
+            makeHeaders(
+              key,
+              {
+                Prefer:
+                  'return=representation'
+              }
+            ),
+
+          body:
+            JSON.stringify(payload),
+
+          cache:
+            'no-store'
+        }
+      )
 
     const data =
-      await parseResponse(response)
+      await readResponse(response)
 
     if (!response.ok) {
       console.error(
@@ -353,10 +327,13 @@ export async function POST(request) {
         {
           error:
             'Could not save company to Supabase.',
-          details: data
+
+          details:
+            data
         },
         {
-          status: response.status
+          status:
+            response.status
         }
       )
     }
@@ -367,7 +344,9 @@ export async function POST(request) {
         : data
 
     return NextResponse.json(
-      normalizeDatabaseRow(saved || row),
+      normalizeCompany(
+        saved || payload
+      ),
       {
         status: 201
       }
@@ -383,7 +362,7 @@ export async function POST(request) {
         error:
           error instanceof Error
             ? error.message
-            : 'Could not save prospect.'
+            : 'Could not save company.'
       },
       {
         status: 500
