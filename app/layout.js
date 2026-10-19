@@ -1,11 +1,12 @@
-// TRI AXIS v0.1.5
-// FILE DESTINATION: app/layout.js
+// TRI AXIS v0.1.6
+// COMPLETE REPLACEMENT FILE
+// DESTINATION: app/layout.js
 
 import './globals.css'
 import Link from 'next/link'
 
-const APP_VERSION = 'v0.1.5'
-const APP_MILESTONE = 'Prospect Table Discovery'
+const APP_VERSION = 'v0.1.6'
+const APP_MILESTONE = 'Advanced Prospect Filters'
 
 export const metadata = {
   title: 'Tri Axis | Industrial Prospect Intelligence',
@@ -21,9 +22,7 @@ export default function RootLayout({ children }) {
           <aside className="sidebar">
             <div className="brand">
               <p className="brand-title">TRI AXIS</p>
-              <p className="brand-subtitle">
-                Supply Company
-              </p>
+              <p className="brand-subtitle">Supply Company</p>
             </div>
 
             <nav className="sidebar-nav">
